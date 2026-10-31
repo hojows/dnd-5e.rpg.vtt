@@ -1,0 +1,11 @@
+*
+!.gitignore
+
+# Shared setting
+!/misc.xml
+!/modules.xml
+!/vcs.xml
+!/encodings.xml
+!/codeStyles/
+!/inspectionProfiles/
+!/runConfigurations/
