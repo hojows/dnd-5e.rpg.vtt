@@ -1,7 +1,7 @@
 {
   "core": {
     "version": "2026.10.1",
-    "file": "./data/compendium_core.sqlite.gz",
+    "file": "./compendium_core.sqlite.gz",
     "compressed": true,
     "sha256": "f4676bfcc1f291b8fab23ad60b0eafab87328a5750f1aa2f6cce01b9228ad312",
     "uncompressed_sha256": "df2bc0e6d1976bd381e3192b320e5cfd0e373a3e16df5fde5dd945f3aabd93a8",
@@ -12,7 +12,7 @@
   "languages": {
     "ita": {
       "version": "2026.10.1",
-      "file": "./data/compendium_ita.sqlite.gz",
+      "file": "./compendium_ita.sqlite.gz",
       "compressed": true,
       "label": "Italiano",
       "sha256": "885fb60de03b395c59266ba315524def7b94b13f43128e9482438cd5f0bdd9e9",
