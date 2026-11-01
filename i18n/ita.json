@@ -16,7 +16,9 @@
     "error": "Errore DB: {error}"
   },
   "hub": {
-    "subtitle": "Architettura Serverless Offline-First • SQLite Wasm • Google Drive • P2P WebRTC",
+    "pageTitle": "D&D 5e RPG VTT",
+    "appTitle": "D&D 5e PRG Virtual Tabletop",
+    "subtitle": "Architettura Serverless Offline-First • SQLite Wasm • P2P WebRTC • Google Drive",
     "heroTitle": "Scegli la tua postazione di gioco",
     "heroDesc": "Collega il tuo Google Drive dal menu utente in alto a destra per sincronizzare personaggi e campagne nel cloud, oppure lavora in locale.",
     "pcBadge": "GARAGE & SESSIONE LIVE",

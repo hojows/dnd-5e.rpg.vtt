@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
-		<title>D&amp;D 5e VTT — Character &amp; Campaign Hub</title>
+		<title data-i18n="hub.pageTitle"></title>
 		<script src="https://cdn.tailwindcss.com"></script>
 	</head>
 	<body class="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-amber-500 selection:text-zinc-950">
@@ -20,10 +20,8 @@
           d20
         </span>
 					<div class="truncate">
-						<h1 class="text-base sm:text-lg font-bold tracking-tight text-zinc-100 truncate">D&amp;D 5e Virtual Tabletop</h1>
-						<p class="text-[11px] text-zinc-400 truncate hidden sm:block" data-i18n="hub.subtitle">
-							Serverless Offline-First Architecture &bull; SQLite Wasm &bull; Google Drive &bull; P2P WebRTC
-						</p>
+						<h1 class="text-base sm:text-lg font-bold tracking-tight text-zinc-100 truncate" data-i18n="hub.appTitle"></h1>
+						<p class="text-[11px] text-zinc-400 truncate hidden sm:block" data-i18n="hub.subtitle"></p>
 					</div>
 				</div>
 
@@ -32,10 +30,10 @@
 					<!-- Isolated SQLite DB Status Widget -->
 					<div class="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 px-2.5 py-1.5 rounded-lg text-xs" data-role="db-status-widget">
 						<span class="w-2 h-2 rounded-full bg-emerald-400 hidden" data-show-if="isDbReady"></span>
-						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
+						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse hidden" data-show-if="isDownloadingDb"></span>
 						<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
-						<span class="text-zinc-300 font-medium max-w-[140px] sm:max-w-none truncate" data-field="dbStatusText">DB idle</span>
-						<div class="w-14 h-1.5 bg-zinc-800 rounded-full overflow-hidden" data-show-if="isDownloadingDb">
+						<span class="text-zinc-300 font-medium max-w-[140px] sm:max-w-none truncate" data-field="dbStatusText"></span>
+						<div class="w-14 h-1.5 bg-zinc-800 rounded-full overflow-hidden hidden" data-show-if="isDownloadingDb">
 							<div class="h-full bg-amber-400 transition-all duration-200" data-role="db-progress-bar" style="width: 0%"></div>
 						</div>
 					</div>
@@ -45,27 +43,20 @@
 						aria-label="Language"
 						class="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-200 cursor-pointer focus:outline-none focus:border-amber-500"
 						data-action="switchLanguage">
-						<option value="eng">🇬🇧 ENG</option>
-						<option value="ita">🇮🇹 ITA</option>
+						<option value="eng">🇬🇧</option>
+						<option value="ita">🇮🇹</option>
 					</select>
 
-					<!-- User Avatar / Generic User Icon with Dropdown Menu -->
+					<!-- User Avatar / Generic User Silhouette with Dropdown Menu -->
 					<div class="relative" data-role="user-menu-container">
-						<button
-							aria-label="Account Menu"
-							class="relative flex items-center justify-center w-9 h-9 rounded-full bg-zinc-950 border border-zinc-700 hover:border-amber-500/60 focus:outline-none transition"
-							data-action="toggleUserMenu"
-							type="button">
-							<!-- Google Profile Picture (shown when logged in) -->
-							<img alt="User Avatar" class="hidden w-full h-full rounded-full object-cover" data-role="user-avatar-img" referrerpolicy="no-referrer" />
-							<!-- Generic User Silhouette SVG (shown when logged out or no picture) -->
+						<button aria-label="Account" class="relative flex items-center justify-center w-9 h-9 rounded-full bg-zinc-950 border border-zinc-700 hover:border-amber-500/60 focus:outline-none transition" data-action="toggleUserMenu" type="button">
+							<img alt="" class="hidden w-full h-full rounded-full object-cover" data-role="user-avatar-img" referrerpolicy="no-referrer" />
 							<span class="flex items-center justify-center text-zinc-400" data-role="user-avatar-fallback">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
             </span>
-							<!-- Connection Status Dot -->
 							<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-500 ring-2 ring-zinc-900" data-role="user-status-dot"></span>
 						</button>
 
@@ -74,32 +65,26 @@
 							<!-- State A: Logged Out -->
 							<div class="space-y-3" data-role="auth-logged-out">
 								<div>
-									<div class="text-xs font-bold text-zinc-200" data-i18n="common.guestTitle">Guest User (Offline)</div>
-									<p class="text-[11px] text-zinc-400 mt-0.5 leading-relaxed" data-i18n="common.notConnectedDesc">
-										Sign in to sync your characters and campaigns on your personal Google Drive.
-									</p>
+									<div class="text-xs font-bold text-zinc-200" data-i18n="common.guestTitle"></div>
+									<p class="text-[11px] text-zinc-400 mt-0.5 leading-relaxed" data-i18n="common.notConnectedDesc"></p>
 								</div>
-								<button class="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow transition" data-action="loginGoogle" data-i18n="common.loginGoogle" type="button">
-									Login Google Drive
-								</button>
+								<button class="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow transition" data-action="loginGoogle" data-i18n="common.loginGoogle" type="button"></button>
 							</div>
 
 							<!-- State B: Logged In -->
 							<div class="hidden space-y-3" data-role="auth-logged-in">
 								<div class="border-b border-zinc-800 pb-2.5">
-									<div class="text-xs font-bold text-white truncate" data-field="userName">User</div>
-									<div class="text-[11px] text-emerald-400 truncate" data-field="userEmail">user@gmail.com</div>
+									<div class="text-xs font-bold text-white truncate" data-field="userName"></div>
+									<div class="text-[11px] text-emerald-400 truncate" data-field="userEmail"></div>
 									<div class="text-[10px] text-zinc-500 mt-1">
-										<span data-i18n="common.vaultFolder">Cloud Folder:</span> <code>DND5E_Vault</code>
+										<span data-i18n="common.vaultFolder"></span> <code>DND5E_Vault</code>
 									</div>
 								</div>
 								<button
 									class="w-full py-1.5 px-3 rounded-xl bg-zinc-800 hover:bg-rose-950/60 hover:text-rose-300 border border-zinc-700/80 text-xs font-semibold text-zinc-200 transition"
 									data-action="logoutGoogle"
 									data-i18n="common.logout"
-									type="button">
-									Logout
-								</button>
+									type="button"></button>
 							</div>
 						</div>
 					</div>
@@ -110,12 +95,8 @@
 		<!-- Main Content -->
 		<main class="max-w-6xl w-full mx-auto px-4 py-8 sm:py-14 flex-1 flex flex-col justify-center">
 			<div class="text-center max-w-2xl mx-auto mb-8 sm:mb-12">
-				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3" data-i18n="hub.heroTitle">
-					Choose your gaming station
-				</h2>
-				<p class="text-sm sm:text-base text-zinc-400" data-i18n="hub.heroDesc">
-					Connect your Google Drive from the top-right user menu to sync your characters and campaigns in the cloud, or work locally offline.
-				</p>
+				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3" data-i18n="hub.heroTitle"></h2>
+				<p class="text-sm sm:text-base text-zinc-400" data-i18n="hub.heroDesc"></p>
 			</div>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
@@ -123,22 +104,16 @@
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-amber-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./pc.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" data-i18n="hub.pcBadge">
-              GARAGE &amp; LIVE SESSION
-            </span>
+							<span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" data-i18n="hub.pcBadge"></span>
 							<span class="text-2xl text-zinc-500 group-hover:text-amber-400 transition-transform group-hover:translate-x-1">&rarr;</span>
 						</div>
-						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-i18n="hub.pcTitle">
-							Player Area (PC Screen)
-						</h3>
-						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-i18n="hub.pcDesc">
-							Create or import your characters from Fight Club 5e XML, browse the offline compendium, shop during Downtime, and roll dice in real time with your party.
-						</p>
+						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-i18n="hub.pcTitle"></h3>
+						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-i18n="hub.pcDesc"></p>
 					</div>
 					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4">
-						<li data-i18n="hub.pcBullet1">&bull; Saved in your personal Google Drive (only the active PC stays in local cache)</li>
-						<li data-i18n="hub.pcBullet2">&bull; Free Garage Mode or bound to Campaign rules</li>
-						<li data-i18n="hub.pcBullet3">&bull; Responsive layout for smartphones, tablets, and desktops</li>
+						<li data-i18n="hub.pcBullet1"></li>
+						<li data-i18n="hub.pcBullet2"></li>
+						<li data-i18n="hub.pcBullet3"></li>
 					</ul>
 				</a>
 
@@ -146,29 +121,23 @@
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-indigo-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./gm.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" data-i18n="hub.gmBadge">
-              CAMPAIGN CONTROL &amp; RULES
-            </span>
+							<span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" data-i18n="hub.gmBadge"></span>
 							<span class="text-2xl text-zinc-500 group-hover:text-indigo-400 transition-transform group-hover:translate-x-1">&rarr;</span>
 						</div>
-						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-i18n="hub.gmTitle">
-							Dungeon Master Area (GM Screen)
-						</h3>
-						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-i18n="hub.gmDesc">
-							Create the campaign manifest, set max level and permissions, build the Downtime Shop from the SQLite database, and monitor party character sheets in real time.
-						</p>
+						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-i18n="hub.gmTitle"></h3>
+						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-i18n="hub.gmDesc"></p>
 					</div>
 					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4">
-						<li data-i18n="hub.gmBullet1">&bull; Automatic read-only sharing with players' Google emails</li>
-						<li data-i18n="hub.gmBullet2">&bull; Automatic audit of gold, level, and downtime purchases</li>
-						<li data-i18n="hub.gmBullet3">&bull; WebRTC P2P Host to receive dice rolls and push live updates</li>
+						<li data-i18n="hub.gmBullet1"></li>
+						<li data-i18n="hub.gmBullet2"></li>
+						<li data-i18n="hub.gmBullet3"></li>
 					</ul>
 				</a>
 			</div>
 		</main>
 
 		<footer class="border-t border-zinc-900 py-4 text-center text-xs text-zinc-500 px-4">
-			<span data-i18n="hub.footer">D&amp;D 5e VTT &mdash; SQLite databases are cached locally in your browser for offline use.</span>
+			<span data-i18n="hub.footer"></span>
 		</footer>
 
 		<script type="module">
@@ -215,7 +184,6 @@
 				}
 			});
 
-			// Avvia il DB (e l'eventuale traduzione salvata in localStorage; altrimenti resta in inglese senza scaricare altri file)
 			dbService.init();
 		</script>
 	</body>

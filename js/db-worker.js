@@ -61,7 +61,7 @@ async function ensureSqlJsLoaded(wasmCdnUrl) {
 async function decompressGzipIfNeeded(uint8Array) {
 	if (uint8Array.length >= 2 && uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
 		if (typeof DecompressionStream === 'undefined') {
-			throw new Error('DecompressionStream non supportato dal browser.');
+			throw new Error('DecompressionStream not supported by browser.');
 		}
 		const stream = new Blob([uint8Array]).stream().pipeThrough(new DecompressionStream('gzip'));
 		const buffer = await new Response(stream).arrayBuffer();
@@ -73,7 +73,7 @@ async function decompressGzipIfNeeded(uint8Array) {
 async function downloadPackWithProgress(url, packLabel) {
 	const response = await fetch(url, {cache: 'no-cache'});
 	if (!response.ok) {
-		throw new Error(`Download ${packLabel} fallito (${response.status})`);
+		throw new Error(`Failed to download ${packLabel} (${response.status})`);
 	}
 
 	const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
@@ -157,22 +157,23 @@ function mountDatabases(coreBuffer, langBuffer, cVer, lVer) {
 				coreDb.run(`ATTACH DATABASE '/${langDb.filename}' AS i18n;`);
 				i18nAttached = true;
 			} catch (err2) {
-				console.warn('ATTACH DATABASE i18n fallito:', err2);
+				console.warn('ATTACH DATABASE i18n failed:', err2);
 				i18nAttached = false;
 			}
 		}
 	}
 }
 
+/**
+ * Risolve in modo universale il path del file .sqlite.gz rispetto a db-manifest.json
+ * funzionando sia se nel JSON c'è "./data/file.sqlite.gz" sia se c'è "./file.sqlite.gz".
+ */
 function resolveAssetUrl(filePath, manifestUrl) {
-	const clean = String(filePath || '').replace(/^\.\//, '');
-	// Se il path nel manifest non inizia con "data/", risolvilo rispetto alla cartella di db-manifest.json
-	if (!clean.startsWith('data/') && !clean.startsWith('http')) {
-		return new URL(clean, manifestUrl).href;
-	}
-	// Altrimenti risolvilo rispetto alla root dell'app (un livello sopra /data/)
-	const appRootUrl = new URL('../', manifestUrl).href;
-	return new URL(clean, appRootUrl).href;
+	const clean = String(filePath || '')
+		.trim()
+		.replace(/^\.\//, '')
+		.replace(/^data\//, '');
+	return new URL(clean, manifestUrl).href;
 }
 
 async function initAndSyncDatabases(config) {
@@ -182,7 +183,6 @@ async function initAndSyncDatabases(config) {
 	self.postMessage({type: 'DB_STATUS', status: 'initializing', activeLang});
 	await ensureSqlJsLoaded(SQLJS_WASM_CDN);
 
-	// Se activeLang === "eng", langKey è null -> il DB italiano NON viene né cercato né scaricato
 	const langKey = activeLang !== 'eng' ? `lang_${activeLang}` : null;
 
 	let cachedCore = await readPackFromCache(IDB_NAME, IDB_STORE, 'core');
@@ -198,7 +198,6 @@ async function initAndSyncDatabases(config) {
 			cachedLang ? cachedLang.version : null
 		);
 
-		// Emette subito "ready" dalla cache solo se non dobbiamo scaricare per la prima volta il Language Pack
 		if (!needsRemoteLangDownload) {
 			self.postMessage({
 				                 type: 'DB_STATUS',
@@ -223,8 +222,7 @@ async function initAndSyncDatabases(config) {
 				const remoteCore = manifest.core;
 				if (remoteCore && (!cachedCore || cachedCore.version !== remoteCore.version)) {
 					const coreUrl = resolveAssetUrl(remoteCore.file, MANIFEST_URL);
-					const coreLabel = activeLang === 'eng' ? 'Core DB (ENG)' : 'Compendio Core (ENG)';
-					const freshCoreBuf = await downloadPackWithProgress(coreUrl, coreLabel);
+					const freshCoreBuf = await downloadPackWithProgress(coreUrl, 'Core DB (ENG)');
 					cachedCore = {version: remoteCore.version, buffer: freshCoreBuf, updatedAt: Date.now()};
 					await writePackToCache(IDB_NAME, IDB_STORE, 'core', cachedCore);
 					updated = true;
@@ -263,11 +261,11 @@ async function initAndSyncDatabases(config) {
 			}
 		} catch (netErr) {
 			if (!coreDb) {
-				throw new Error('Failed to download DB and no offline cache found: ' + netErr.message);
+				throw new Error('Failed to download DB and no offline copy available: ' + netErr.message);
 			}
 		}
 	} else if (!coreDb) {
-		throw new Error('Device is offline and database is not cached yet.');
+		throw new Error('Offline and database not cached yet.');
 	}
 
 	return {coreVersion, langVersion, activeLang, i18nAttached};

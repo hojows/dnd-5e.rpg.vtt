@@ -1,0 +1,38 @@
+{
+  "common": {
+    "loginGoogle": "Sign in with Google Drive",
+    "logout": "Logout",
+    "guestTitle": "Guest User (Offline)",
+    "notConnectedDesc": "Sign in to sync your characters and campaigns on your personal Google Drive.",
+    "vaultFolder": "Cloud Folder:"
+  },
+  "db": {
+    "idle": "DB idle",
+    "initializing": "Initializing SQLite...",
+    "downloading": "Downloading {pack} ({progress}%)",
+    "decompressing": "Decompressing {pack}...",
+    "ready": "DB Ready ({lang} v{version})",
+    "error": "DB Error: {error}"
+  },
+  "hub": {
+    "pageTitle": "D&D 5e RPG VTT",
+    "appTitle": "D&D 5e RPG Virtual Tabletop",
+    "subtitle": "Serverless Offline-First Architecture • SQLite Wasm • P2P WebRTC • Google Drive",
+    "heroTitle": "Choose your gaming station",
+    "heroDesc": "Connect your Google Drive from the top-right user menu to sync your characters and campaigns in the cloud, or work locally offline.",
+    "pcBadge": "GARAGE & LIVE SESSION",
+    "pcTitle": "Player Area (PC Screen)",
+    "pcDesc": "Create or import your characters from Fight Club 5e XML, browse the offline compendium, shop during Downtime, and roll dice in real time with your party.",
+    "pcBullet1": "• Saved in your personal Google Drive (only the active PC stays in local cache)",
+    "pcBullet2": "• Free Garage Mode or bound to Campaign rules",
+    "pcBullet3": "• Responsive layout for smartphones, tablets, and desktops",
+    "gmBadge": "CAMPAIGN CONTROL & RULES",
+    "gmTitle": "Dungeon Master Area (GM Screen)",
+    "gmDesc": "Create the campaign manifest, set max level and permissions, build the Downtime Shop from the SQLite database, and monitor party character sheets in real time.",
+    "gmBullet1": "• Automatic read-only sharing with players' Google emails",
+    "gmBullet2": "• Automatic audit of gold, level, and downtime purchases",
+    "gmBullet3": "• WebRTC P2P Host to receive dice rolls and push live updates",
+    "footer": "D&D 5e VTT — SQLite databases are cached locally in your browser for offline use.",
+    "toastConnected": "Connected to Google Drive as {email}!"
+  }
+}
