@@ -9,14 +9,17 @@ import {uiBinder} from './ui-binder.js';
 
 class PlayerAppController {
 	constructor() {
-		this.driveCharacterFiles = []; // [{ id, name, modifiedTime }] letti da Google Drive
-		this.activeCharacter = null;   // Unico PG tenuto nella cache locale
+		this.driveCharacterFiles = [];
+		this.activeCharacter = null;
 		this.activeCampaign = null;
 		this.rollAdvantage = 0;
+		this.sessionState = {
+			connectionStatus: 'disconnected', // "disconnected" | "connecting" | "connected"
+			masterRoomAvailable: false
+		};
 	}
 
 	async init() {
-		// 1. Avvia il DB SQLite in background
 		dbService.onStatusChange((dbState) => {
 			uiBinder.updateDbStatusWidget(document.body, dbState);
 			if (dbState.status === 'ready' && this.activeCharacter) {
@@ -25,9 +28,9 @@ class PlayerAppController {
 		});
 		dbService.init();
 
-		// 2. Stato autenticazione Google Drive
 		driveService.onAuthChange(async (authState) => {
 			uiBinder.updateAuthWidget(document.body, authState);
+			this.updateCampaignAndSessionBar();
 			if (authState.authenticated) {
 				await this.refreshDriveCharactersList();
 			} else {
@@ -36,28 +39,61 @@ class PlayerAppController {
 			}
 		});
 
-		// 3. Listener P2P WebRTC
 		this.setupP2PListeners();
-
-		// 4. Azioni UI
 		uiBinder.bindActions(document.body, this.getGlobalHandlers());
 
-		// 5. Ripristina l'unico PG attivo dalla cache locale (o crea un PG vuoto)
 		const cachedActive = driveService.getActiveCharacterWorkingCopy();
 		if (cachedActive) {
 			await this.setActiveCharacter(cachedActive, false);
 		} else {
 			await this.createNewBlankCharacter();
 		}
-
-		// 6. Se l'utente non è collegato a Google Drive, avvisa subito di collegarsi per caricare/salvare i PG
-		if (!driveService.isAuthenticated()) {
-			this.showBanner('Clicca su \'Collega Google Drive\' in alto a destra per caricare o salvare i tuoi PG nel cloud.');
-		}
 	}
 
 	// =========================================================================
-	// SINCRONIZZAZIONE CON GOOGLE DRIVE E CACHE DEL SINGOLO PG ATTIVO
+	// BARRA CAMPAGNA E INDICATORE STATO SESSIONE P2P
+	// =========================================================================
+
+	updateCampaignAndSessionBar() {
+		const barEl = document.querySelector('[data-role="campaign-session-bar"]');
+		if (!barEl) return;
+
+		const hasCampaign = Boolean(this.activeCharacter?.campaignId);
+		const isConnected = this.sessionState.connectionStatus === 'connected';
+		const isConnecting = this.sessionState.connectionStatus === 'connecting';
+		const isSessionAvailable = Boolean(this.sessionState.masterRoomAvailable);
+
+		let indicatorLabel = 'Sessione Non Attiva (Master Offline)';
+		if (isConnected) {
+			indicatorLabel = 'Connesso alla Sessione Live';
+		} else if (isConnecting) {
+			indicatorLabel = 'Connessione alla Sessione in corso...';
+		} else if (isSessionAvailable) {
+			indicatorLabel = 'Sessione Attiva (Master Online)';
+		}
+
+		uiBinder.bindFields(barEl, {
+			linkedCampaignName: this.activeCampaign?.campaignName || this.activeCharacter?.campaignName || 'Campagna Associata',
+			sessionStatusText: indicatorLabel
+		});
+
+		uiBinder.bindVisibility(barEl, {
+			hasNoCampaign: !hasCampaign,
+			hasCampaign,
+			isSessionOffline: hasCampaign && !isConnected && !isConnecting && !isSessionAvailable,
+			isSessionReadyToJoin: hasCampaign && !isConnected && !isConnecting && isSessionAvailable,
+			isSessionConnecting: hasCampaign && isConnecting,
+			isSessionConnected: hasCampaign && isConnected,
+			canJoinSession: hasCampaign && !isConnected && !isConnecting
+		});
+
+		uiBinder.bindEnabled(barEl, {
+			isMasterSessionAvailable: isSessionAvailable
+		});
+	}
+
+	// =========================================================================
+	// GESTIONE PG ATTIVO E DRIVE
 	// =========================================================================
 
 	async refreshDriveCharactersList() {
@@ -66,7 +102,6 @@ class PlayerAppController {
 			this.driveCharacterFiles = await driveService.listCharactersOnDrive();
 			this.renderCharacterSelector();
 
-			// Se avevamo solo il PG vuoto iniziale e su Drive ci sono già PG salvati, carica automaticamente il più recente
 			const isInitialBlank =
 				this.activeCharacter &&
 				!this.activeCharacter.driveFileId &&
@@ -87,7 +122,6 @@ class PlayerAppController {
 		if (!selectEl) return;
 		selectEl.replaceChildren();
 
-		// Mostra sempre il PG attualmente aperto in locale in cima
 		if (this.activeCharacter) {
 			const currentOpt = document.createElement('option');
 			currentOpt.value = this.activeCharacter.driveFileId || '__LOCAL_ACTIVE__';
@@ -97,7 +131,6 @@ class PlayerAppController {
 			selectEl.appendChild(currentOpt);
 		}
 
-		// Aggiungi gli altri PG presenti su Google Drive (senza scaricarli in cache finché non vengono selezionati)
 		this.driveCharacterFiles.forEach((file) => {
 			if (this.activeCharacter && file.id === this.activeCharacter.driveFileId) return;
 			const opt = document.createElement('option');
@@ -109,21 +142,35 @@ class PlayerAppController {
 	}
 
 	async setActiveCharacter(character, markDirty = false) {
+		// Se stavamo connessi in P2P con un altro PG, disconnettiamoci prima
+		if (this.sessionState.connectionStatus !== 'disconnected') {
+			p2pService.disconnectPlayerClient(true, this.activeCharacter?.localId);
+		}
+		p2pService.stopSessionMonitor();
+
 		this.activeCharacter = character;
+		this.sessionState = {connectionStatus: 'disconnected', masterRoomAvailable: false};
 		driveService.saveActiveCharacterWorkingCopy(this.activeCharacter, markDirty);
 		this.updateSaveStatusIndicator();
 		this.renderCharacterSelector();
 
-		if (character.campaignDriveFileId) {
-			try {
-				this.activeCampaign = await driveService.refreshSharedCampaign(character.campaignDriveFileId);
-			} catch (_) {
+		if (character.campaignId) {
+			if (character.campaignDriveFileId) {
+				try {
+					this.activeCampaign = await driveService.refreshSharedCampaign(character.campaignDriveFileId);
+				} catch (_) {
+					this.activeCampaign = driveService.getActiveCampaignWorkingCopy();
+				}
+			} else {
 				this.activeCampaign = driveService.getActiveCampaignWorkingCopy();
 			}
+			// Avvia il monitoraggio automatico per sapere se la sessione del Master è attiva
+			p2pService.startSessionMonitor(character.campaignId);
 		} else {
 			this.activeCampaign = null;
 		}
 
+		this.updateCampaignAndSessionBar();
 		await this.renderActiveSheet();
 		await this.renderCampaignShop();
 	}
@@ -132,6 +179,9 @@ class PlayerAppController {
 		const blank = {
 			localId: `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
 			driveFileId: null,
+			campaignId: null,
+			campaignName: null,
+			campaignDriveFileId: null,
 			name: 'Nuovo Avventuriero',
 			level: 1,
 			experience: 0,
@@ -154,9 +204,6 @@ class PlayerAppController {
 		await this.setActiveCharacter(blank, true);
 	}
 
-	/**
-	 * Aggiorna la copia di lavoro locale (unico PG in cache) e invia in P2P se connesso.
-	 */
 	async markModifiedAndSyncLocal(reason = 'manual_edit') {
 		if (!this.activeCharacter) return;
 		driveService.saveActiveCharacterWorkingCopy(this.activeCharacter, true);
@@ -165,9 +212,6 @@ class PlayerAppController {
 		p2pService.sendCharacterUpdateToMaster(this.activeCharacter, reason);
 	}
 
-	/**
-	 * Salva esplicitamente il PG attivo su Google Drive.
-	 */
 	async saveActiveCharacterToCloud() {
 		if (!this.activeCharacter) return;
 		try {
@@ -186,7 +230,7 @@ class PlayerAppController {
 	updateSaveStatusIndicator() {
 		const isDirty = Boolean(this.activeCharacter?._dirty);
 		uiBinder.bindFields(document.body, {
-			saveStatusText: isDirty ? 'Modifiche locali non salvate su Drive' : 'Salvato su Drive'
+			saveStatusText: isDirty ? 'Modifiche non salvate su Drive' : 'Salvato su Drive'
 		});
 	}
 
@@ -287,21 +331,39 @@ class PlayerAppController {
 		);
 	}
 
+	// =========================================================================
+	// LISTENER P2P LIVE
+	// =========================================================================
+
 	setupP2PListeners() {
+		p2pService.on('SESSION_AVAILABILITY', ({campaignId, available}) => {
+			if (this.activeCharacter?.campaignId !== campaignId) return;
+			this.sessionState.masterRoomAvailable = available;
+			this.updateCampaignAndSessionBar();
+		});
+
 		p2pService.on('STATUS_CHANGE', (st) => {
-			uiBinder.bindFields(document.body, {
-				p2pStatusText:
-					st.status === 'connected'
-					? '🟢 Connesso al Master (Live)'
-					: st.status === 'connecting'
-					  ? '🟡 Connessione P2P in corso...'
-					  : '⚪ P2P Disconnesso (Offline/Downtime)'
-			});
+			this.sessionState.connectionStatus = st.status;
+			if (st.status === 'connected') {
+				this.sessionState.masterRoomAvailable = true;
+			}
+			this.updateCampaignAndSessionBar();
+		});
+
+		p2pService.on('SESSION_CLOSED_BY_MASTER', () => {
+			this.sessionState.connectionStatus = 'disconnected';
+			this.sessionState.masterRoomAvailable = false;
+			this.updateCampaignAndSessionBar();
+			this.showBanner('Il Master ha chiuso la sessione live.');
 		});
 
 		p2pService.on('CAMPAIGN_RECEIVED', async (freshCampaign) => {
 			this.activeCampaign = freshCampaign;
+			if (this.activeCharacter) {
+				this.activeCharacter.campaignName = freshCampaign.campaignName;
+			}
 			driveService.saveActiveCampaignWorkingCopy(freshCampaign, false);
+			this.updateCampaignAndSessionBar();
 			await this.renderActiveSheet();
 			await this.renderCampaignShop();
 			this.showBanner('Il Master ha aggiornato le regole e il negozio della campagna!');
@@ -318,6 +380,10 @@ class PlayerAppController {
 		p2pService.on('DICE_ROLLED', (rollEntry) => {
 			const logContainer = document.querySelector('[data-list="dice-log"]');
 			uiBinder.prependDiceLogEntry(logContainer, 'tpl-dice-log-row', rollEntry);
+		});
+
+		p2pService.on('ERROR', ({error}) => {
+			if (error) this.showBanner(error, true);
 		});
 	}
 
@@ -349,8 +415,12 @@ class PlayerAppController {
 		bannerEl.textContent = message;
 		bannerEl.classList.remove('hidden');
 		bannerEl.dataset.variant = isError ? 'error' : 'info';
-		setTimeout(() => bannerEl.classList.add('hidden'), 5000);
+		setTimeout(() => bannerEl.classList.add('hidden'), 4500);
 	}
+
+	// =========================================================================
+	// AZIONI GLOBALI DELLA PAGINA
+	// =========================================================================
 
 	getGlobalHandlers() {
 		return {
@@ -384,7 +454,7 @@ class PlayerAppController {
 
 				if (this.activeCharacter?._dirty) {
 					const confirmSwitch = window.confirm(
-						'Hai modifiche non salvate su Google Drive per il PG attuale. Vuoi cambiare personaggio comunque (la cache locale verrà sostituita col nuovo PG)?'
+						'Hai modifiche non salvate su Google Drive per il PG attuale. Vuoi cambiare personaggio comunque?'
 					);
 					if (!confirmSwitch) {
 						this.renderCharacterSelector();
@@ -395,7 +465,7 @@ class PlayerAppController {
 				try {
 					const loaded = await driveService.loadCharacterFromDrive(selectedDriveId);
 					await this.setActiveCharacter(loaded, false);
-					this.showBanner(`Personaggio "${loaded.name}" caricato in memoria!`);
+					this.showBanner(`Personaggio "${loaded.name}" caricato!`);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -422,7 +492,7 @@ class PlayerAppController {
 					const xmlText = await file.text();
 					const imported = await fc5eImporter.parseXmlString(xmlText);
 					await this.setActiveCharacter(imported, true);
-					this.showBanner(`"${imported.name}" importato! Clicca su 'Salva PG' per salvarlo su Google Drive.`);
+					this.showBanner(`"${imported.name}" importato! Clicca su 'Salva PG su Drive' per salvarlo nel cloud.`);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				} finally {
@@ -432,7 +502,9 @@ class PlayerAppController {
 
 			linkToCampaignPicker: async () => {
 				try {
-					const picked = await driveService.pickSharedJsonFile();
+					const picked = await driveService.pickSharedJsonFile(
+						'Seleziona il file della Campagna condiviso dal tuo Master'
+					);
 					if (!picked || !picked.content?.campaignId) return;
 
 					const manifest = picked.content;
@@ -443,6 +515,7 @@ class PlayerAppController {
 					this.activeCampaign = manifest;
 
 					this.activeCharacter.campaignId = manifest.campaignId;
+					this.activeCharacter.campaignName = manifest.campaignName;
 					this.activeCharacter.campaignDriveFileId = picked.driveFileId;
 					await this.saveActiveCharacterToCloud();
 
@@ -453,6 +526,8 @@ class PlayerAppController {
 						);
 					}
 
+					p2pService.startSessionMonitor(manifest.campaignId);
+					this.updateCampaignAndSessionBar();
 					await this.renderActiveSheet();
 					await this.renderCampaignShop();
 					this.showBanner(`PG associato alla campagna "${manifest.campaignName}"!`);
@@ -461,18 +536,55 @@ class PlayerAppController {
 				}
 			},
 
+			unlinkFromCampaign: async () => {
+				if (!this.activeCharacter?.campaignId) return;
+				const ok = window.confirm(
+					'Vuoi scollegare questo personaggio dalla campagna e riportarlo in Modalità Garage libera?'
+				);
+				if (!ok) return;
+
+				if (this.sessionState.connectionStatus !== 'disconnected') {
+					p2pService.disconnectPlayerClient(true, this.activeCharacter.localId);
+				}
+				p2pService.stopSessionMonitor();
+
+				this.activeCharacter.campaignId = null;
+				this.activeCharacter.campaignName = null;
+				this.activeCharacter.campaignDriveFileId = null;
+				this.activeCampaign = null;
+				this.sessionState = {connectionStatus: 'disconnected', masterRoomAvailable: false};
+
+				await this.markModifiedAndSyncLocal('unlinked_campaign');
+				this.updateCampaignAndSessionBar();
+				await this.renderActiveSheet();
+				await this.renderCampaignShop();
+				this.showBanner('Personaggio riportato in Modalità Garage.');
+			},
+
+			checkSessionNow: async () => {
+				if (!this.activeCharacter?.campaignId) return;
+				const available = await p2pService.probeMasterSession(this.activeCharacter.campaignId);
+				if (available !== null) {
+					this.sessionState.masterRoomAvailable = available;
+					this.updateCampaignAndSessionBar();
+				}
+			},
+
 			connectP2P: () => {
-				const campId =
-					document.querySelector('[data-field="manualRoomId"]')?.value?.trim() ||
-					this.activeCharacter?.campaignId;
+				const campId = this.activeCharacter?.campaignId;
 				if (!campId) {
-					this.showBanner('Collega prima una campagna da Drive o incolla l\'ID Stanza del Master.', true);
+					this.showBanner('Associa prima il personaggio a una campagna.', true);
 					return;
 				}
 				p2pService.connectAsPlayerClient(campId, {
 					playerEmail: driveService.userProfile?.email || null,
 					character: this.activeCharacter
 				});
+			},
+
+			disconnectP2P: () => {
+				p2pService.disconnectPlayerClient(true, this.activeCharacter?.localId);
+				this.showBanner('Disconnesso dalla sessione live.');
 			},
 
 			switchTab: (evt, el) => {
@@ -548,6 +660,10 @@ class PlayerAppController {
 		};
 	}
 
+	// =========================================================================
+	// HANDLER DEI CAMPI DELLA SCHEDA (SINCRONIZZATI IN TEMPO REALE VIA P2P)
+	// =========================================================================
+
 	getSheetItemHandlers() {
 		return {
 			updateBasicField: async (evt, el) => {
@@ -564,14 +680,14 @@ class PlayerAppController {
 					this.activeCharacter[field] = val;
 				}
 
-				await this.markModifiedAndSyncLocal('field_edit');
+				await this.markModifiedAndSyncLocal(`field_edit:${field}`);
 				await this.renderActiveSheet();
 			},
 
 			updateAbilityScore: async (evt, el, ctx) => {
 				if (!ctx?.abilityKey) return;
 				this.activeCharacter.abilities[ctx.abilityKey] = Number(el.value) || 10;
-				await this.markModifiedAndSyncLocal('ability_edit');
+				await this.markModifiedAndSyncLocal(`ability_edit:${ctx.abilityKey}`);
 				await this.renderActiveSheet();
 			},
 
@@ -603,7 +719,7 @@ class PlayerAppController {
 				const listType = el.getAttribute('data-list-type');
 				if (!listType || !ctx || !Array.isArray(this.activeCharacter[listType])) return;
 				this.activeCharacter[listType].splice(ctx.index, 1);
-				await this.markModifiedAndSyncLocal('item_removed');
+				await this.markModifiedAndSyncLocal(`item_removed:${listType}`);
 				await this.renderActiveSheet();
 			}
 		};

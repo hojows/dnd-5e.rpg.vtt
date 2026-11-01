@@ -30,11 +30,13 @@ class DomUiBinder {
 			if (el instanceof HTMLInputElement) {
 				if (el.type === 'checkbox') {
 					el.checked = Boolean(val);
-				} else {
+				} else if (document.activeElement !== el) {
 					el.value = val ?? '';
 				}
 			} else if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
-				el.value = val ?? '';
+				if (document.activeElement !== el) {
+					el.value = val ?? '';
+				}
 			} else {
 				el.textContent = val ?? '';
 			}
@@ -78,6 +80,10 @@ class DomUiBinder {
 		});
 	}
 
+	/**
+	 * Registra i listener [data-action] in modo idempotente: se un elemento viene
+	 * ri-associato durante il re-render della scheda, sostituisce il vecchio listener senza duplicarlo.
+	 */
 	bindActions(rootEl, handlers, contextItem = null) {
 		if (!rootEl || !handlers) return;
 
@@ -86,6 +92,10 @@ class DomUiBinder {
 			const fn = handlers[actionName];
 			if (typeof fn !== 'function') return;
 
+			if (!el._boundActionHandlers) {
+				el._boundActionHandlers = new Map();
+			}
+
 			const eventType =
 				      el instanceof HTMLInputElement ||
 				      el instanceof HTMLSelectElement ||
@@ -93,9 +103,14 @@ class DomUiBinder {
 				      ? el.getAttribute('data-event') || 'change'
 				      : 'click';
 
-			el.addEventListener(eventType, (evt) => {
-				fn(evt, el, contextItem);
-			});
+			const existing = el._boundActionHandlers.get(actionName);
+			if (existing) {
+				el.removeEventListener(existing.eventType, existing.listener);
+			}
+
+			const listener = (evt) => fn(evt, el, contextItem);
+			el._boundActionHandlers.set(actionName, {eventType, listener});
+			el.addEventListener(eventType, listener);
 		};
 
 		if (rootEl.hasAttribute && rootEl.hasAttribute('data-action')) {
@@ -122,11 +137,6 @@ class DomUiBinder {
 		containerEl.appendChild(fragment);
 	}
 
-	/**
-	 * Aggiorna esclusivamente i blocchi di autenticazione Google Drive:
-	 * - [data-role="auth-logged-out"] visibile quando NON connesso
-	 * - [data-role="auth-logged-in"] visibile SOLO quando connesso (es. Salva su Drive, Esci)
-	 */
 	updateAuthWidget(rootEl, authState) {
 		if (!rootEl || !authState) return;
 		const isLogged = Boolean(authState.authenticated);
@@ -144,9 +154,6 @@ class DomUiBinder {
 		});
 	}
 
-	/**
-	 * Aggiorna esclusivamente il widget [data-role="db-status-widget"] senza toccare il resto della pagina.
-	 */
 	updateDbStatusWidget(rootEl, dbState) {
 		if (!rootEl || !dbState) return;
 		const widgetEl = rootEl.querySelector('[data-role="db-status-widget"]') || rootEl;
@@ -221,6 +228,7 @@ class DomUiBinder {
 		const proficiencyBonus = Math.ceil(level / 4) + 1;
 		const customRegistry = campaignManifest?.customCompendium || null;
 
+		// 1. Popola i campi statici e collega subito i relativi listener (es. updateBasicField per PF, oro, livello, note)
 		this.bindFields(rootEl, {
 			name: character.name || 'Senza Nome',
 			level,
@@ -245,13 +253,15 @@ class DomUiBinder {
 			},
 			notes: character.notes || '',
 			campaignBadgeText: perms.isCampaignBound
-			                   ? `Campagna: ${campaignManifest.campaignName} (Max Liv. ${perms.maxAllowedLevel})`
+			                   ? `Campagna: ${campaignManifest?.campaignName || 'Associata'} (Max Liv. ${perms.maxAllowedLevel})`
 			                   : 'Modalità Garage (Modifica Libera)'
 		});
 
 		this.bindVisibility(rootEl, perms);
 		this.bindEnabled(rootEl, perms);
+		this.bindActions(rootEl, actionHandlers);
 
+		// 2. Griglia delle 6 Caratteristiche
 		const abilitiesContainer = rootEl.querySelector('[data-list="abilities"]');
 		this.renderList(abilitiesContainer, 'tpl-ability-card', CORE_ABILITIES, (node, ab) => {
 			const score = Number(character.abilities?.[ab.key] ?? 10);
@@ -269,6 +279,7 @@ class DomUiBinder {
 			this.bindActions(node, actionHandlers, {abilityKey: ab.key, label: ab.full_ita, mod});
 		});
 
+		// 3. Lista delle 18 Abilità
 		const skillsContainer = rootEl.querySelector('[data-list="skills"]');
 		const profSkillsStr = (character.skills || '').toLowerCase();
 
@@ -294,6 +305,7 @@ class DomUiBinder {
 			});
 		});
 
+		// 4. Lista Incantesimi
 		const spellsContainer = rootEl.querySelector('[data-list="spells"]');
 		const hydratedSpells = await Promise.all(
 			(character.spells || []).map((sp) => dbService.hydrateEntry('spells', sp, customRegistry))
@@ -326,6 +338,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="spells"]')
 		);
 
+		// 5. Lista Oggetti ed Equipaggiamento
 		const itemsContainer = rootEl.querySelector('[data-list="items"]');
 		const hydratedItems = await Promise.all(
 			(character.items || []).map((it) => dbService.hydrateEntry('items', it, customRegistry))
@@ -355,6 +368,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="items"]')
 		);
 
+		// 6. Lista Talenti e Privilegi
 		const featsContainer = rootEl.querySelector('[data-list="feats"]');
 		const hydratedFeats = await Promise.all(
 			(character.feats || []).map((ft) => dbService.hydrateEntry('feats', ft, customRegistry))

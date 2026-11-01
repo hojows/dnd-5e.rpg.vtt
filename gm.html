@@ -52,16 +52,28 @@
 				</div>
 			</div>
 
-			<div class="bg-zinc-950/80 border-t border-zinc-800/80 px-3 sm:px-4 py-2">
+			<div class="bg-zinc-950/90 border-t border-zinc-800/80 px-3 sm:px-4 py-2" data-role="gm-session-bar">
 				<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-					<span class="text-zinc-400 font-medium" data-field="p2pHostStatus">⚪ Stanza P2P Non Avviata</span>
+					<!-- Indicatore Stato Sessione Master -->
+					<div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800">
+						<span class="w-2.5 h-2.5 rounded-full bg-rose-500" data-show-if="isSessionClosed"></span>
+						<span class="hidden w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" data-show-if="isSessionHosting"></span>
+						<span class="text-zinc-200 font-semibold" data-field="p2pHostStatus">Sessione Live: Chiusa</span>
+					</div>
+
 					<div class="flex flex-wrap items-center gap-2">
 						<button class="hidden px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-action="inspectSharedCharacterFromDrive" data-role="auth-logged-in" type="button">
 							Apri PG Condiviso da Drive
 						</button>
-						<button class="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold" data-action="startP2PHost" type="button">
-							Avvia Stanza P2P Master
+
+						<button class="px-3.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow" data-action="startP2PHost" data-show-if="isSessionClosed" type="button">
+							&#9654; Avvia Sessione Live
 						</button>
+
+						<button class="hidden px-3.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold shadow" data-action="stopP2PHost" data-show-if="isSessionHosting" type="button">
+							&#9632; Chiudi Sessione Live
+						</button>
+
 						<button class="hidden px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="pushCampaignUpdate" data-role="auth-logged-in" type="button">
 							💾 Salva su Drive &amp; Invia Push
 						</button>
@@ -237,6 +249,10 @@
 							<p class="text-xs text-zinc-400">Liv. <span data-field="level">1</span> &bull; <span data-field="race">Razza</span> &bull; <span data-field="classesRaw">Classe</span></p>
 						</div>
 						<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-xs font-bold" data-field="hpSummary">10/10 PF</span>
+						<div class="flex flex-col items-end gap-1">
+							<span class="text-[10px] font-bold text-zinc-300" data-field="connectionBadge">🟢 Online Live</span>
+							<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-xs font-bold" data-field="hpSummary">10/10 PF</span>
+						</div>
 					</div>
 					<div class="text-xs text-amber-400 font-semibold mt-1">Patrimonio: <span data-field="wealthSummary">0 mo</span></div>
 					<div class="mt-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px]">

@@ -10,7 +10,10 @@ class MasterAppController {
 	constructor() {
 		this.driveCampaignFiles = [];
 		this.activeCampaign = null;
-		this.partyCharacters = new Map();
+		this.partyCharacters = new Map(); // localId -> { character, peerId, online, audit }
+		this.inspectedCharacterId = null;
+		this.hostStatus = 'disconnected'; // "disconnected" | "connecting" | "hosting"
+		this.connectedPeersCount = 0;
 	}
 
 	async init() {
@@ -42,9 +45,31 @@ class MasterAppController {
 			await this.createNewCampaign();
 		}
 
-		if (!driveService.isAuthenticated()) {
-			this.showBanner('Clicca su \'Collega Google Drive\' in alto a destra per salvare o caricare le tue Campagne.');
+		this.updateMasterSessionBar();
+	}
+
+	updateMasterSessionBar() {
+		const barEl = document.querySelector('[data-role="gm-session-bar"]');
+		if (!barEl) return;
+
+		const isHosting = this.hostStatus === 'hosting';
+		const isConnecting = this.hostStatus === 'connecting';
+
+		let statusText = 'Sessione Live: Chiusa (Offline)';
+		if (isHosting) {
+			statusText = `Sessione Live: ATTIVA (${this.connectedPeersCount} PG connessi)`;
+		} else if (isConnecting) {
+			statusText = 'Apertura Stanza P2P in corso...';
 		}
+
+		uiBinder.bindFields(barEl, {
+			p2pHostStatus: statusText
+		});
+
+		uiBinder.bindVisibility(barEl, {
+			isSessionClosed: !isHosting && !isConnecting,
+			isSessionHosting: isHosting
+		});
 	}
 
 	async refreshDriveCampaignsList() {
@@ -90,6 +115,9 @@ class MasterAppController {
 	}
 
 	async setActiveCampaign(campaign) {
+		if (this.hostStatus === 'hosting') {
+			p2pService.stopMasterHost(true);
+		}
 		this.activeCampaign = campaign;
 		driveService.saveActiveCampaignWorkingCopy(campaign, false);
 		this.renderCampaignSelector();
@@ -97,6 +125,7 @@ class MasterAppController {
 		await this.renderShopManager();
 		await this.renderShopCatalogBuilder();
 		this.renderPartyDashboard();
+		this.updateMasterSessionBar();
 	}
 
 	async createNewCampaign() {
@@ -130,7 +159,7 @@ class MasterAppController {
 			await this.refreshDriveCampaignsList();
 			this.showBanner('Campagna salvata su Google Drive e inviata in push al Party!');
 		} else {
-			this.showBanner('Regole aggiornate in locale (Collegati a Google Drive per salvarle in cloud).');
+			this.showBanner('Regole aggiornate e inviate via P2P (Collegati a Drive per salvarle in cloud).');
 		}
 	}
 
@@ -212,21 +241,29 @@ class MasterAppController {
 		});
 	}
 
+	// =========================================================================
+	// SINCRONIZZAZIONE PARTY LIVE E AGGIORNAMENTO MODALE ISPEZIONE
+	// =========================================================================
+
 	setupP2PListeners() {
 		p2pService.on('STATUS_CHANGE', (st) => {
-			uiBinder.bindFields(document.body, {
-				p2pHostStatus:
-					st.status === 'hosting'
-					? `🟢 Stanza P2P Attiva (ID: ${this.activeCampaign?.campaignId})`
-					: '⚪ Stanza P2P Non Avviata'
-			});
+			this.hostStatus = st.status;
+			this.connectedPeersCount = st.connectedCount ?? 0;
+			this.updateMasterSessionBar();
 		});
 
-		p2pService.on('PLAYER_JOINED', ({peerId, character}) => {
+		p2pService.on('PLAYER_JOINED', async ({peerId, character}) => {
 			if (!character?.localId) return;
 			const audit = rulesGuard.auditCharacter(character, this.activeCampaign);
-			this.partyCharacters.set(character.localId, {character, peerId, audit});
+			this.partyCharacters.set(character.localId, {
+				character,
+				peerId,
+				online: true,
+				audit
+			});
 			this.renderPartyDashboard();
+			await this.refreshInspectModalIfOpen(character.localId);
+
 			p2pService.sendToPlayer(peerId, {
 				type: 'CAMPAIGN_PUSH',
 				campaign: this.activeCampaign,
@@ -234,10 +271,26 @@ class MasterAppController {
 			});
 		});
 
-		p2pService.on('CHARACTER_UPDATED', ({peerId, character}) => {
+		p2pService.on('CHARACTER_UPDATED', async ({peerId, character}) => {
 			if (!character?.localId) return;
 			const audit = rulesGuard.auditCharacter(character, this.activeCampaign);
-			this.partyCharacters.set(character.localId, {character, peerId, audit});
+			this.partyCharacters.set(character.localId, {
+				character,
+				peerId,
+				online: true,
+				audit
+			});
+			this.renderPartyDashboard();
+			await this.refreshInspectModalIfOpen(character.localId);
+		});
+
+		p2pService.on('PEER_DISCONNECTED', ({peerId, characterId}) => {
+			for (const [id, entry] of this.partyCharacters.entries()) {
+				if (entry.peerId === peerId || (characterId && id === characterId)) {
+					entry.online = false;
+					entry.peerId = null;
+				}
+			}
 			this.renderPartyDashboard();
 		});
 
@@ -245,6 +298,15 @@ class MasterAppController {
 			const logContainer = document.querySelector('[data-list="dice-log"]');
 			uiBinder.prependDiceLogEntry(logContainer, 'tpl-dice-log-row', rollEntry);
 		});
+	}
+
+	async refreshInspectModalIfOpen(characterId) {
+		if (this.inspectedCharacterId !== characterId) return;
+		const modalEl = document.getElementById('gm-inspect-modal');
+		const modalBody = document.querySelector('[data-role="gm-inspect-sheet-container"]');
+		const entry = this.partyCharacters.get(characterId);
+		if (!modalEl || modalEl.classList.contains('hidden') || !modalBody || !entry) return;
+		await uiBinder.renderCharacterSheet(modalBody, entry.character, this.activeCampaign, {});
 	}
 
 	renderPartyDashboard() {
@@ -270,6 +332,7 @@ class MasterAppController {
 					classesRaw: ch.classesRaw,
 					hpSummary: `${ch.hp?.current ?? 0} / ${ch.hp?.max ?? 0} PF`,
 					wealthSummary: `${wealthGp} mo`,
+					connectionBadge: entry.online ? '🟢 Online Live' : '⚪ Offline',
 					auditStatusText: audit.valid ? 'Conforme alle regole' : audit.warnings.join(' | ')
 				});
 
@@ -280,6 +343,7 @@ class MasterAppController {
 
 				uiBinder.bindActions(node, {
 					inspectPlayerSheet: async () => {
+						this.inspectedCharacterId = ch.localId;
 						const modalEl = document.getElementById('gm-inspect-modal');
 						const modalBody = document.querySelector('[data-role="gm-inspect-sheet-container"]');
 						if (!modalEl || !modalBody) return;
@@ -306,7 +370,7 @@ class MasterAppController {
 		bannerEl.textContent = message;
 		bannerEl.classList.remove('hidden');
 		bannerEl.dataset.variant = isError ? 'error' : 'info';
-		setTimeout(() => bannerEl.classList.add('hidden'), 5000);
+		setTimeout(() => bannerEl.classList.add('hidden'), 4500);
 	}
 
 	getGlobalHandlers() {
@@ -387,7 +451,12 @@ class MasterAppController {
 					if (!picked || !picked.content?.localId) return;
 					const ch = picked.content;
 					const audit = rulesGuard.auditCharacter(ch, this.activeCampaign);
-					this.partyCharacters.set(ch.localId, {character: ch, peerId: null, audit});
+					this.partyCharacters.set(ch.localId, {
+						character: ch,
+						peerId: null,
+						online: false,
+						audit
+					});
 					this.renderPartyDashboard();
 					this.showBanner(`Scheda di "${ch.name}" caricata da Google Drive!`);
 				} catch (err) {
@@ -398,6 +467,17 @@ class MasterAppController {
 			startP2PHost: () => {
 				if (!this.activeCampaign) return;
 				p2pService.startAsMasterHost(this.activeCampaign.campaignId);
+				this.showBanner('Sessione Live avviata! I giocatori della campagna ora vedono la stanza attiva.');
+			},
+
+			stopP2PHost: () => {
+				p2pService.stopMasterHost(true);
+				for (const entry of this.partyCharacters.values()) {
+					entry.online = false;
+					entry.peerId = null;
+				}
+				this.renderPartyDashboard();
+				this.showBanner('Sessione Live chiusa.');
 			},
 
 			pushCampaignUpdate: async () => {
@@ -409,6 +489,7 @@ class MasterAppController {
 			},
 
 			closeInspectModal: () => {
+				this.inspectedCharacterId = null;
 				document.getElementById('gm-inspect-modal')?.classList.add('hidden');
 			},
 

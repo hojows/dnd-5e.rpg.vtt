@@ -71,21 +71,57 @@
 			</div>
 
 			<!-- Seconda Barra: Stato Campagna & Connessione P2P -->
-			<div class="bg-zinc-950/80 border-t border-zinc-800/80 px-3 sm:px-4 py-2">
+			<!-- Seconda Barra: Associazione Campagna & Controllo Sessione Live -->
+			<div class="bg-zinc-950/90 border-t border-zinc-800/80 px-3 sm:px-4 py-2" data-role="campaign-session-bar">
 				<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-					<div class="flex flex-wrap items-center gap-2">
-						<button class="hidden px-2.5 py-1 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 font-medium" data-action="linkToCampaignPicker" data-role="auth-logged-in" type="button">
-							Seleziona Campagna da Drive
+
+					<!-- STATO A: Il PG NON fa ancora parte di nessuna campagna -->
+					<div class="flex flex-wrap items-center justify-between w-full gap-2" data-show-if="hasNoCampaign">
+          <span class="text-zinc-400">
+            🔧 <strong>Modalità Garage:</strong> questo personaggio non è associato a nessuna campagna.
+          </span>
+						<button class="hidden px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="linkToCampaignPicker" data-role="auth-logged-in" type="button">
+							🔗 Associa PG a una Campagna (Drive)
 						</button>
-						<span class="text-zinc-400 font-medium" data-field="p2pStatusText">⚪ P2P Disconnesso</span>
 					</div>
 
-					<div class="flex items-center gap-2 w-full sm:w-auto">
-						<input class="flex-1 sm:w-44 bg-zinc-900 border border-zinc-800 rounded-md px-2.5 py-1 text-xs text-zinc-200" data-field="manualRoomId" placeholder="ID Campagna opzionale..." type="text" />
-						<button class="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold whitespace-nowrap" data-action="connectP2P" type="button">
-							Connetti P2P Live
-						</button>
+					<!-- STATO B: Il PG fa parte di una campagna -> Mostra Indicatore Sessione & Entra/Disconnetti -->
+					<div class="hidden flex flex-wrap items-center justify-between w-full gap-3" data-show-if="hasCampaign">
+						<div class="flex flex-wrap items-center gap-2">
+            <span class="px-2.5 py-1 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
+              Campagna: <strong class="text-white" data-field="linkedCampaignName">-</strong>
+            </span>
+							<button class="hidden px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px]" data-action="linkToCampaignPicker" data-role="auth-logged-in" type="button">
+								Cambia
+							</button>
+							<button class="px-2 py-1 rounded bg-zinc-900 hover:bg-rose-950/50 text-rose-400 text-[11px]" data-action="unlinkFromCampaign" type="button">
+								Scollega
+							</button>
+						</div>
+
+						<!-- Indicatore Stato Sessione + Bottoni Entra / Disconnetti -->
+						<div class="flex flex-wrap items-center gap-2.5">
+							<div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800">
+								<span class="w-2.5 h-2.5 rounded-full bg-rose-500" data-show-if="isSessionOffline"></span>
+								<span class="hidden w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" data-show-if="isSessionReadyToJoin"></span>
+								<span class="hidden w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" data-show-if="isSessionConnecting"></span>
+								<span class="hidden w-2.5 h-2.5 rounded-full bg-sky-400" data-show-if="isSessionConnected"></span>
+								<span class="font-medium text-zinc-200" data-field="sessionStatusText">Verifica sessione...</span>
+								<button class="text-zinc-400 hover:text-white ml-1" data-action="checkSessionNow" data-show-if="canJoinSession" title="Aggiorna stato sessione" type="button">
+									&#8635;
+								</button>
+							</div>
+
+							<button class="px-3.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow" data-action="connectP2P" data-enable-if="isMasterSessionAvailable" data-show-if="canJoinSession" type="button">
+								&#9654; Entra nella Sessione
+							</button>
+
+							<button class="hidden px-3.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold shadow" data-action="disconnectP2P" data-show-if="isSessionConnected" type="button">
+								&#9632; Disconnetti dalla Sessione
+							</button>
+						</div>
 					</div>
+
 				</div>
 			</div>
 		</header>
