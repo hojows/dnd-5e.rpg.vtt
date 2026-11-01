@@ -8,9 +8,12 @@
 	</head>
 	<body class="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-amber-500 selection:text-zinc-950">
 
-		<!-- Header -->
+		<!-- Banner Notifiche Toast -->
+		<div class="hidden fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 px-4 py-3 rounded-xl border border-amber-500/40 bg-zinc-900/95 text-amber-300 shadow-2xl text-sm font-medium" data-role="notification-banner"></div>
+
+		<!-- Header con Stato DB e Login Google Drive -->
 		<header class="border-b border-zinc-800 bg-zinc-900/70 backdrop-blur sticky top-0 z-20">
-			<div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+			<div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
 				<div class="flex items-center gap-3">
         <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-lg">
           d20
@@ -21,28 +24,64 @@
 					</div>
 				</div>
 
-				<!-- Stato DB SQLite in pre-caricamento -->
-				<div class="flex items-center gap-3 bg-zinc-950/90 border border-zinc-800 px-3 py-2 rounded-lg text-xs">
-					<span class="w-2 h-2 rounded-full bg-emerald-400" data-show-if="isDbReady"></span>
-					<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
-					<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
-					<span class="text-zinc-300 font-medium" data-field="dbStatusText">Verifica Compendio SQLite...</span>
-					<div class="w-20 h-1.5 bg-zinc-800 rounded-full overflow-hidden" data-show-if="isDownloadingDb">
-						<div class="h-full bg-amber-400 transition-all duration-200" data-role="db-progress-bar" style="width: 0%"></div>
+				<div class="flex flex-wrap items-center gap-3">
+					<!-- Stato DB SQLite -->
+					<div class="flex items-center gap-2.5 bg-zinc-950/90 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs">
+						<span class="w-2 h-2 rounded-full bg-emerald-400" data-show-if="isDbReady"></span>
+						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
+						<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
+						<span class="text-zinc-300 font-medium" data-field="dbStatusText">Verifica Compendio SQLite...</span>
+						<div class="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden" data-show-if="isDownloadingDb">
+							<div class="h-full bg-amber-400 transition-all duration-200" data-role="db-progress-bar" style="width: 0%"></div>
+						</div>
+					</div>
+
+					<!-- Pulsante Login / Utente Collegato -->
+					<div class="flex items-center gap-2">
+						<span class="hidden text-xs text-emerald-400 font-medium" data-field="userEmail" data-show-if="isGoogleLogged"></span>
+						<button class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white shadow" data-action="loginGoogle" data-show-if="isGoogleLoggedOut" type="button">
+							Collega Google Drive
+						</button>
+						<button class="hidden px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" data-show-if="isGoogleLogged" type="button">
+							Disconnetti
+						</button>
 					</div>
 				</div>
 			</div>
 		</header>
 
 		<!-- Main Selection Grid -->
-		<main class="max-w-6xl w-full mx-auto px-4 py-8 sm:py-16 flex-1 flex flex-col justify-center">
-			<div class="text-center max-w-2xl mx-auto mb-8 sm:mb-12">
+		<main class="max-w-6xl w-full mx-auto px-4 py-8 sm:py-12 flex-1 flex flex-col justify-center">
+			<div class="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
 				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
 					Scegli la tua postazione di gioco
 				</h2>
 				<p class="text-sm sm:text-base text-zinc-400">
-					Gestisci i tuoi personaggi in totale autonomia anche offline, sincronizzali sul tuo Google Drive personale e collegati in P2P alla stanza del Master durante la sessione.
+					Collega il tuo Google Drive per sincronizzare i personaggi e le campagne nel tuo cloud personale, oppure lavora offline in locale.
 				</p>
+			</div>
+
+			<!-- Box Centrale Stato Connessione Google Drive -->
+			<div class="max-w-2xl w-full mx-auto mb-8">
+				<div class="rounded-2xl border border-sky-500/30 bg-sky-950/20 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4" data-show-if="isGoogleLoggedOut">
+					<div class="text-center sm:text-left">
+						<h3 class="text-sm font-bold text-sky-300">Sincronizzazione Cloud Google Drive non attiva</h3>
+						<p class="text-xs text-zinc-400 mt-0.5">
+							Collegando il tuo account Google ritroverai automaticamente i tuoi PG e le campagne su tutti i tuoi dispositivi.
+						</p>
+					</div>
+					<button class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white whitespace-nowrap shadow-lg" data-action="loginGoogle" type="button">
+						Accedi con Google Drive
+					</button>
+				</div>
+
+				<div class="hidden rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3" data-show-if="isGoogleLogged">
+					<div class="flex items-center gap-2.5 text-xs">
+						<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+						<span class="text-zinc-300">Connesso a Google Drive come <strong class="text-emerald-300" data-field="userEmail"></strong></span>
+					</div>
+					<span class="text-[11px] text-zinc-400">Cartella attiva: <code>DND5E_Vault</code></span>
+				</div>
 			</div>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
@@ -61,7 +100,7 @@
 						</p>
 					</div>
 					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4">
-						<li>&bull; Salvataggio automatico su IndexedDB locale e Google Drive personale</li>
+						<li>&bull; Salvataggio nel tuo Google Drive personale (solo il PG attivo resta in cache locale)</li>
 						<li>&bull; Modalità Garage libera o vincolata alle regole della Campagna</li>
 						<li>&bull; Funzionamento garantito su smartphone, tablet e desktop</li>
 					</ul>
@@ -94,13 +133,45 @@
 			D&amp;D 5e VTT &mdash; I database SQLite vengono memorizzati nella cache locale del tuo browser per l'utilizzo offline.
 		</footer>
 
-		<!-- Avvia subito il pre-caricamento non bloccante del DB SQLite già dalla Landing Page -->
 		<script type="module">
 			import {dbService} from './js/db-service.js';
+			import {driveService} from './js/drive-service.js';
 			import {uiBinder} from './js/ui-binder.js';
+
+			const showBanner = (msg) => {
+				const el = document.querySelector('[data-role="notification-banner"]');
+				if (!el) return;
+				el.textContent = msg;
+				el.classList.remove('hidden');
+				setTimeout(() => el.classList.add('hidden'), 4500);
+			};
 
 			dbService.onStatusChange((st) => uiBinder.updateDbStatusWidget(document.body, st));
 			dbService.init();
+
+			driveService.onAuthChange((authState) => {
+				uiBinder.bindFields(document.body, {
+					userEmail: authState.user?.email || ''
+				});
+				uiBinder.bindVisibility(document.body, {
+					isGoogleLogged: authState.authenticated,
+					isGoogleLoggedOut: !authState.authenticated
+				});
+			});
+
+			uiBinder.bindActions(document.body, {
+				loginGoogle: async () => {
+					try {
+						const profile = await driveService.signIn();
+						showBanner(`Collegato a Google Drive come ${profile.email}!`);
+					} catch (err) {
+						showBanner(err.message);
+					}
+				},
+				logoutGoogle: () => {
+					driveService.signOut();
+				}
+			});
 		</script>
 	</body>
 </html>

@@ -5,9 +5,6 @@ import {getAbilityModifier} from './formula-engine.js';
 import {rulesGuard} from './rules-guard.js';
 
 class DomUiBinder {
-	/**
-	 * Clona il contenuto di un tag <template id="..."> presente nel documento HTML.
-	 */
 	cloneTemplate(templateId) {
 		const tpl = document.getElementById(templateId);
 		if (!tpl || !(tpl instanceof HTMLTemplateElement)) {
@@ -17,17 +14,11 @@ class DomUiBinder {
 		return firstChild ? firstChild.cloneNode(true) : tpl.content.cloneNode(true);
 	}
 
-	/**
-	 * Legge una proprietà annidata (es. "hp.current") da un oggetto.
-	 */
 	resolvePath(obj, path) {
 		if (!obj || !path) return undefined;
 		return path.split('.').reduce((acc, part) => (acc !== undefined && acc !== null ? acc[part] : undefined), obj);
 	}
 
-	/**
-	 * Popola tutti gli elementi con attributo [data-field="..."] dentro rootEl.
-	 */
 	bindFields(rootEl, data) {
 		if (!rootEl || !data) return;
 
@@ -56,42 +47,45 @@ class DomUiBinder {
 	}
 
 	/**
-	 * Mostra o nasconde gli elementi con [data-show-if="flag"] e [data-hide-if="flag"].
+	 * Mostra o nasconde gli elementi con [data-show-if="flag"] e [data-hide-if="flag"]
+	 * ignorando i flag non presenti nell'oggetto passato.
 	 */
 	bindVisibility(rootEl, flags) {
 		if (!rootEl || !flags) return;
 
 		rootEl.querySelectorAll('[data-show-if]').forEach((el) => {
 			const key = el.getAttribute('data-show-if');
-			const visible = Boolean(this.resolvePath(flags, key));
-			el.classList.toggle('hidden', !visible);
+			const val = this.resolvePath(flags, key);
+			if (val === undefined) return;
+			el.classList.toggle('hidden', !Boolean(val));
 		});
 
 		rootEl.querySelectorAll('[data-hide-if]').forEach((el) => {
 			const key = el.getAttribute('data-hide-if');
-			const hidden = Boolean(this.resolvePath(flags, key));
-			el.classList.toggle('hidden', hidden);
+			const val = this.resolvePath(flags, key);
+			if (val === undefined) return;
+			el.classList.toggle('hidden', Boolean(val));
 		});
 	}
 
 	/**
-	 * Abilita o disabilita input e pulsanti con [data-enable-if="flag"].
+	 * Abilita o disabilita input e pulsanti con [data-enable-if="flag"]
+	 * ignorando i flag non presenti nell'oggetto passato.
 	 */
 	bindEnabled(rootEl, flags) {
 		if (!rootEl || !flags) return;
 
 		rootEl.querySelectorAll('[data-enable-if]').forEach((el) => {
 			const key = el.getAttribute('data-enable-if');
-			const enabled = Boolean(this.resolvePath(flags, key));
+			const val = this.resolvePath(flags, key);
+			if (val === undefined) return;
+			const enabled = Boolean(val);
 			el.disabled = !enabled;
 			el.classList.toggle('opacity-50', !enabled);
 			el.classList.toggle('pointer-events-none', !enabled);
 		});
 	}
 
-	/**
-	 * Collega i listener agli elementi con [data-action="nomeAzione"].
-	 */
 	bindActions(rootEl, handlers, contextItem = null) {
 		if (!rootEl || !handlers) return;
 
@@ -118,9 +112,6 @@ class DomUiBinder {
 		rootEl.querySelectorAll('[data-action]').forEach(attach);
 	}
 
-	/**
-	 * Svuota un contenitore e renderizza una lista clonando un <template>.
-	 */
 	renderList(containerEl, templateId, items, setupRowFn, emptyStateEl = null) {
 		if (!containerEl) return;
 		containerEl.replaceChildren();
@@ -139,9 +130,6 @@ class DomUiBinder {
 		containerEl.appendChild(fragment);
 	}
 
-	/**
-	 * Aggiorna l'indicatore di stato del database SQLite presente nell'header HTML.
-	 */
 	updateDbStatusWidget(rootEl, dbState) {
 		if (!rootEl || !dbState) return;
 		const labelMap = {
@@ -170,9 +158,6 @@ class DomUiBinder {
 		});
 	}
 
-	/**
-	 * Renderizza una voce nel registro condiviso dei tiri di dado.
-	 */
 	prependDiceLogEntry(containerEl, templateId, rollEntry, maxEntries = 40) {
 		if (!containerEl || !rollEntry) return;
 		const node = this.cloneTemplate(templateId);
@@ -208,10 +193,6 @@ class DomUiBinder {
 		}
 	}
 
-	/**
-	 * Renderizza l'intera scheda di un personaggio all'interno di un contenitore DOM.
-	 * Usato sia nella vista principale del Giocatore (pc.html) sia nel modale di ispezione del Master (gm.html).
-	 */
 	async renderCharacterSheet(rootEl, character, campaignManifest, actionHandlers = {}) {
 		if (!rootEl || !character) return;
 
@@ -221,7 +202,6 @@ class DomUiBinder {
 		const proficiencyBonus = Math.ceil(level / 4) + 1;
 		const customRegistry = campaignManifest?.customCompendium || null;
 
-		// 1. Dati anagrafici, Punti Ferita, Valuta e Stato Campagna
 		this.bindFields(rootEl, {
 			name: character.name || 'Senza Nome',
 			level,
@@ -253,7 +233,6 @@ class DomUiBinder {
 		this.bindVisibility(rootEl, perms);
 		this.bindEnabled(rootEl, perms);
 
-		// 2. Griglia delle 6 Caratteristiche
 		const abilitiesContainer = rootEl.querySelector('[data-list="abilities"]');
 		this.renderList(abilitiesContainer, 'tpl-ability-card', CORE_ABILITIES, (node, ab) => {
 			const score = Number(character.abilities?.[ab.key] ?? 10);
@@ -271,7 +250,6 @@ class DomUiBinder {
 			this.bindActions(node, actionHandlers, {abilityKey: ab.key, label: ab.full_ita, mod});
 		});
 
-		// 3. Lista delle 18 Abilità (Skills)
 		const skillsContainer = rootEl.querySelector('[data-list="skills"]');
 		const profSkillsStr = (character.skills || '').toLowerCase();
 
@@ -285,7 +263,7 @@ class DomUiBinder {
 
 			this.bindFields(node, {
 				skillName: lang === 'ita' ? sk.label_ita : sk.label_eng,
-				abilityTag: lang === 'ita' ? sk.ability.toUpperCase() : sk.ability.toUpperCase(),
+				abilityTag: sk.ability.toUpperCase(),
 				bonus: bonusFormatted,
 				proficientMarker: isProficient ? '●' : '○'
 			});
@@ -297,7 +275,6 @@ class DomUiBinder {
 			});
 		});
 
-		// 4. Lista Incantesimi (Idratati dal DB SQLite + Custom)
 		const spellsContainer = rootEl.querySelector('[data-list="spells"]');
 		const hydratedSpells = await Promise.all(
 			(character.spells || []).map((sp) => dbService.hydrateEntry('spells', sp, customRegistry))
@@ -330,7 +307,6 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="spells"]')
 		);
 
-		// 5. Lista Oggetti ed Equipaggiamento (Idratati dal DB SQLite + Custom)
 		const itemsContainer = rootEl.querySelector('[data-list="items"]');
 		const hydratedItems = await Promise.all(
 			(character.items || []).map((it) => dbService.hydrateEntry('items', it, customRegistry))
@@ -360,7 +336,6 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="items"]')
 		);
 
-		// 6. Lista Talenti e Privilegi (Idratati dal DB SQLite + Custom)
 		const featsContainer = rootEl.querySelector('[data-list="feats"]');
 		const hydratedFeats = await Promise.all(
 			(character.feats || []).map((ft) => dbService.hydrateEntry('feats', ft, customRegistry))
