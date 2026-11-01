@@ -2,7 +2,8 @@
 import {APP_CONFIG} from './config.js';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file email profile';
-const SESSION_TOKEN_KEY = 'dnd5e_google_oauth_session';
+const SESSION_STORAGE_KEY = 'dnd5e_google_oauth_session_v2';
+const LAST_EMAIL_STORAGE_KEY = 'dnd5e_google_last_email';
 const ACTIVE_PC_CACHE_KEY = 'dnd5e_active_pc_working_copy';
 const ACTIVE_CAMP_CACHE_KEY = 'dnd5e_active_campaign_working_copy';
 
@@ -12,6 +13,7 @@ class DriveStorageService {
 		this.tokenClient = null;
 		this.userProfile = null;
 		this.vaultFolderId = null;
+		this.lastUserEmail = localStorage.getItem(LAST_EMAIL_STORAGE_KEY) || '';
 		this.pickerApiLoaded = false;
 		this.gisLoaded = false;
 		this.authListeners = new Set();
@@ -68,28 +70,31 @@ class DriveStorageService {
 	}
 
 	// =========================================================================
-	// 2. GESTIONE SESSIONE GOOGLE OAUTH 2.0 E GOOGLE PICKER
+	// 2. GESTIONE SESSIONE GOOGLE OAUTH 2.0 (SENZA REVOCA PERMESSI)
 	// =========================================================================
 
 	restoreSessionFromStorage() {
 		try {
-			const saved = sessionStorage.getItem(SESSION_TOKEN_KEY);
+			const saved = localStorage.getItem(SESSION_STORAGE_KEY);
 			if (!saved) return;
 			const parsed = JSON.parse(saved);
-			if (parsed.expiresAt && Date.now() < parsed.expiresAt) {
+			if (parsed.expiresAt && Date.now() < parsed.expiresAt && parsed.accessToken) {
 				this.accessToken = parsed.accessToken;
-				this.userProfile = parsed.userProfile;
+				this.userProfile = parsed.userProfile || null;
 				this.vaultFolderId = parsed.vaultFolderId || null;
+				if (this.userProfile?.email) {
+					this.lastUserEmail = this.userProfile.email;
+				}
 			} else {
-				sessionStorage.removeItem(SESSION_TOKEN_KEY);
+				localStorage.removeItem(SESSION_STORAGE_KEY);
 			}
 		} catch (_) {}
 	}
 
 	persistSessionToStorage(expiresInSec = 3500) {
 		try {
-			sessionStorage.setItem(
-				SESSION_TOKEN_KEY,
+			localStorage.setItem(
+				SESSION_STORAGE_KEY,
 				JSON.stringify({
 					               accessToken: this.accessToken,
 					               userProfile: this.userProfile,
@@ -97,6 +102,10 @@ class DriveStorageService {
 					               expiresAt: Date.now() + expiresInSec * 1000
 				               })
 			);
+			if (this.userProfile?.email) {
+				this.lastUserEmail = this.userProfile.email;
+				localStorage.setItem(LAST_EMAIL_STORAGE_KEY, this.userProfile.email);
+			}
 		} catch (_) {}
 	}
 
@@ -157,40 +166,49 @@ class DriveStorageService {
 		await this.ensureGoogleLibrariesLoaded();
 
 		return new Promise((resolve, reject) => {
-			this.tokenClient = window.google.accounts.oauth2.initTokenClient({
-				                                                                 client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
-				                                                                 scope: DRIVE_SCOPE,
-				                                                                 callback: async (tokenResponse) => {
-					                                                                 if (tokenResponse.error) {
-						                                                                 reject(new Error(tokenResponse.error_description || tokenResponse.error));
-						                                                                 return;
-					                                                                 }
-					                                                                 this.accessToken = tokenResponse.access_token;
-					                                                                 const expiresIn = Number(tokenResponse.expires_in) || 3500;
-					                                                                 try {
-						                                                                 await this.fetchUserProfile();
-						                                                                 await this.ensureVaultFolder();
-						                                                                 this.persistSessionToStorage(expiresIn);
-						                                                                 this.notifyAuthChange();
-						                                                                 resolve(this.userProfile);
-					                                                                 } catch (err) {
-						                                                                 reject(err);
-					                                                                 }
-				                                                                 }
-			                                                                 });
+			const clientConfig = {
+				client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
+				scope: DRIVE_SCOPE,
+				include_granted_scopes: true,
+				callback: async (tokenResponse) => {
+					if (tokenResponse.error) {
+						reject(new Error(tokenResponse.error_description || tokenResponse.error));
+						return;
+					}
+					this.accessToken = tokenResponse.access_token;
+					const expiresIn = Number(tokenResponse.expires_in) || 3500;
+					try {
+						await this.fetchUserProfile();
+						await this.ensureVaultFolder();
+						this.persistSessionToStorage(expiresIn);
+						this.notifyAuthChange();
+						resolve(this.userProfile);
+					} catch (err) {
+						reject(err);
+					}
+				}
+			};
 
-			this.tokenClient.requestAccessToken({prompt: 'select_account'});
+			if (this.lastUserEmail) {
+				clientConfig.hint = this.lastUserEmail;
+			}
+
+			this.tokenClient = window.google.accounts.oauth2.initTokenClient(clientConfig);
+
+			// prompt: "" evita di riproporre la schermata dei permessi se già concessi
+			this.tokenClient.requestAccessToken({prompt: ''});
 		});
 	}
 
+	/**
+	 * Disconnette la sessione locale nel browser SENZA revocare i permessi OAuth su Google,
+	 * così al login successivo non viene riproposta la schermata di approvazione permessi.
+	 */
 	signOut() {
-		if (this.accessToken && window.google?.accounts?.oauth2) {
-			window.google.accounts.oauth2.revoke(this.accessToken, () => {});
-		}
 		this.accessToken = null;
 		this.userProfile = null;
 		this.vaultFolderId = null;
-		sessionStorage.removeItem(SESSION_TOKEN_KEY);
+		localStorage.removeItem(SESSION_STORAGE_KEY);
 		this.notifyAuthChange();
 	}
 
@@ -214,7 +232,7 @@ class DriveStorageService {
 
 	async driveRequest(url, options = {}) {
 		if (!this.accessToken) {
-			throw new Error('Effettua prima l\'accesso a Google Drive.');
+			throw new Error('Effettua prima il Login a Google Drive.');
 		}
 		const headers = {
 			Authorization: `Bearer ${this.accessToken}`,
@@ -223,7 +241,7 @@ class DriveStorageService {
 		const response = await fetch(url, {...options, headers});
 		if (response.status === 401) {
 			this.signOut();
-			throw new Error('Sessione Google Drive scaduta. Clicca nuovamente su Collega Google Drive.');
+			throw new Error('Sessione Google Drive scaduta. Clicca nuovamente su Login Google Drive.');
 		}
 		if (!response.ok) {
 			const errText = await response.text();
@@ -369,17 +387,11 @@ class DriveStorageService {
 	// 4. CARICAMENTO E SALVATAGGIO CLOUD PER GIOCATORE E MASTER
 	// =========================================================================
 
-	/**
-	 * Scarica l'elenco dei personaggi presenti nella cartella DND5E_Vault su Google Drive.
-	 */
 	async listCharactersOnDrive() {
 		if (!this.isAuthenticated()) return [];
 		return this.listFilesInVault('PG_');
 	}
 
-	/**
-	 * Carica uno specifico personaggio da Google Drive e lo imposta come unica copia attiva in cache.
-	 */
 	async loadCharacterFromDrive(driveFileId) {
 		const ch = await this.readJsonFileFromDrive(driveFileId);
 		ch.driveFileId = driveFileId;
@@ -387,9 +399,6 @@ class DriveStorageService {
 		return ch;
 	}
 
-	/**
-	 * Salva il personaggio attivo su Google Drive e marca la copia locale come sincronizzata (_dirty = false).
-	 */
 	async saveCharacterToDrive(character) {
 		if (!character.localId) {
 			character.localId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -398,7 +407,7 @@ class DriveStorageService {
 
 		if (!this.isAuthenticated()) {
 			this.saveActiveCharacterWorkingCopy(character, true);
-			throw new Error('Collegati a Google Drive per salvare il personaggio nel cloud.');
+			throw new Error('Effettua prima il Login a Google Drive.');
 		}
 
 		const safeName = (character.name || 'PG').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -431,7 +440,7 @@ class DriveStorageService {
 
 		if (!this.isAuthenticated()) {
 			this.saveActiveCampaignWorkingCopy(campaign, true);
-			throw new Error('Collegati a Google Drive per salvare la campagna nel cloud.');
+			throw new Error('Effettua prima il Login a Google Drive.');
 		}
 
 		const safeName = (campaign.campaignName || 'Campagna').replace(/[^a-zA-Z0-9_-]/g, '_');

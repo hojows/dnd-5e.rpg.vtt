@@ -46,10 +46,6 @@ class DomUiBinder {
 		rootEl.querySelectorAll('[data-field]').forEach(applyToElement);
 	}
 
-	/**
-	 * Mostra o nasconde gli elementi con [data-show-if="flag"] e [data-hide-if="flag"]
-	 * ignorando i flag non presenti nell'oggetto passato.
-	 */
 	bindVisibility(rootEl, flags) {
 		if (!rootEl || !flags) return;
 
@@ -68,10 +64,6 @@ class DomUiBinder {
 		});
 	}
 
-	/**
-	 * Abilita o disabilita input e pulsanti con [data-enable-if="flag"]
-	 * ignorando i flag non presenti nell'oggetto passato.
-	 */
 	bindEnabled(rootEl, flags) {
 		if (!rootEl || !flags) return;
 
@@ -130,8 +122,35 @@ class DomUiBinder {
 		containerEl.appendChild(fragment);
 	}
 
+	/**
+	 * Aggiorna esclusivamente i blocchi di autenticazione Google Drive:
+	 * - [data-role="auth-logged-out"] visibile quando NON connesso
+	 * - [data-role="auth-logged-in"] visibile SOLO quando connesso (es. Salva su Drive, Esci)
+	 */
+	updateAuthWidget(rootEl, authState) {
+		if (!rootEl || !authState) return;
+		const isLogged = Boolean(authState.authenticated);
+
+		rootEl.querySelectorAll('[data-role="auth-logged-out"]').forEach((el) => {
+			el.classList.toggle('hidden', isLogged);
+		});
+
+		rootEl.querySelectorAll('[data-role="auth-logged-in"]').forEach((el) => {
+			el.classList.toggle('hidden', !isLogged);
+		});
+
+		rootEl.querySelectorAll('[data-field="userEmail"]').forEach((el) => {
+			el.textContent = authState.user?.email || '';
+		});
+	}
+
+	/**
+	 * Aggiorna esclusivamente il widget [data-role="db-status-widget"] senza toccare il resto della pagina.
+	 */
 	updateDbStatusWidget(rootEl, dbState) {
 		if (!rootEl || !dbState) return;
+		const widgetEl = rootEl.querySelector('[data-role="db-status-widget"]') || rootEl;
+
 		const labelMap = {
 			idle: 'DB in attesa',
 			initializing: 'Inizializzazione SQLite...',
@@ -141,17 +160,17 @@ class DomUiBinder {
 			error: `Errore DB: ${dbState.error || 'Sconosciuto'}`
 		};
 
-		this.bindFields(rootEl, {
+		this.bindFields(widgetEl, {
 			dbStatusText: labelMap[dbState.status] || dbState.status,
 			dbProgressPct: `${dbState.progress ?? 0}%`
 		});
 
-		const progressBar = rootEl.querySelector('[data-role="db-progress-bar"]');
+		const progressBar = widgetEl.querySelector('[data-role="db-progress-bar"]');
 		if (progressBar) {
 			progressBar.style.width = `${dbState.progress ?? 0}%`;
 		}
 
-		this.bindVisibility(rootEl, {
+		this.bindVisibility(widgetEl, {
 			isDownloadingDb: dbState.status === 'downloading' || dbState.status === 'decompressing',
 			isDbReady: dbState.status === 'ready',
 			isDbError: dbState.status === 'error'

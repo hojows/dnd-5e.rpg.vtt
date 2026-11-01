@@ -23,16 +23,12 @@ class MasterAppController {
 		dbService.init();
 
 		driveService.onAuthChange(async (authState) => {
-			uiBinder.bindFields(document.body, {
-				userEmail: authState.user?.email || 'Master Non Connesso'
-			});
-			uiBinder.bindVisibility(document.body, {
-				isGoogleLogged: authState.authenticated,
-				isGoogleLoggedOut: !authState.authenticated
-			});
-
+			uiBinder.updateAuthWidget(document.body, authState);
 			if (authState.authenticated) {
 				await this.refreshDriveCampaignsList();
+			} else {
+				this.driveCampaignFiles = [];
+				this.renderCampaignSelector();
 			}
 		});
 

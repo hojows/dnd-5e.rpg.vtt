@@ -26,8 +26,8 @@
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-					<div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-lg text-xs">
-						<span class="w-2 h-2 rounded-full bg-emerald-400" data-show-if="isDbReady"></span>
+					<div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-lg text-xs" data-role="db-status-widget">
+						<span class="w-2 h-2 rounded-full bg-emerald-400 hidden" data-show-if="isDbReady"></span>
 						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
 						<span class="text-zinc-400" data-field="dbStatusText">DB...</span>
 					</div>
@@ -37,31 +37,33 @@
 						<option value="eng">ENG</option>
 					</select>
 
-					<div class="flex items-center gap-2">
-						<span class="hidden lg:inline text-xs text-zinc-400" data-field="userEmail"></span>
-						<button class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white" data-action="loginGoogle" data-show-if="isGoogleLoggedOut" type="button">
-							Collega Google Drive
-						</button>
-						<button class="hidden px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" data-show-if="isGoogleLogged" type="button">
+					<!-- Bottone Login visibile subito di default -->
+					<button class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow" data-action="loginGoogle" data-role="auth-logged-out" type="button">
+						Login Google Drive
+					</button>
+
+					<!-- Utente connesso + Esci -->
+					<div class="hidden flex items-center gap-2" data-role="auth-logged-in">
+						<span class="hidden lg:inline text-xs text-emerald-400 font-medium" data-field="userEmail"></span>
+						<button class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" type="button">
 							Esci
 						</button>
 					</div>
 				</div>
 			</div>
 
-			<!-- Barra P2P Host & Push Regole -->
 			<div class="bg-zinc-950/80 border-t border-zinc-800/80 px-3 sm:px-4 py-2">
 				<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-					<span class="text-zinc-400 font-medium" data-field="p2pHostStatus">Stanza P2P Non Avviata</span>
+					<span class="text-zinc-400 font-medium" data-field="p2pHostStatus">⚪ Stanza P2P Non Avviata</span>
 					<div class="flex flex-wrap items-center gap-2">
-						<button class="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-action="inspectSharedCharacterFromDrive" type="button">
+						<button class="hidden px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-action="inspectSharedCharacterFromDrive" data-role="auth-logged-in" type="button">
 							Apri PG Condiviso da Drive
 						</button>
 						<button class="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold" data-action="startP2PHost" type="button">
 							Avvia Stanza P2P Master
 						</button>
-						<button class="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="pushCampaignUpdate" type="button">
-							Salva &amp; Invia Push al Party
+						<button class="hidden px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="pushCampaignUpdate" data-role="auth-logged-in" type="button">
+							💾 Salva su Drive &amp; Invia Push
 						</button>
 					</div>
 				</div>

@@ -8,10 +8,8 @@
 	</head>
 	<body class="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-amber-500 selection:text-zinc-950">
 
-		<!-- Banner Notifiche Toast -->
 		<div class="hidden fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 px-4 py-3 rounded-xl border border-amber-500/40 bg-zinc-900/95 text-amber-300 shadow-2xl text-sm font-medium" data-role="notification-banner"></div>
 
-		<!-- Header con Stato DB e Login Google Drive -->
 		<header class="border-b border-zinc-800 bg-zinc-900/70 backdrop-blur sticky top-0 z-20">
 			<div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
 				<div class="flex items-center gap-3">
@@ -25,9 +23,9 @@
 				</div>
 
 				<div class="flex flex-wrap items-center gap-3">
-					<!-- Stato DB SQLite -->
-					<div class="flex items-center gap-2.5 bg-zinc-950/90 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs">
-						<span class="w-2 h-2 rounded-full bg-emerald-400" data-show-if="isDbReady"></span>
+					<!-- Widget isolato Stato DB SQLite -->
+					<div class="flex items-center gap-2.5 bg-zinc-950/90 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs" data-role="db-status-widget">
+						<span class="w-2 h-2 rounded-full bg-emerald-400 hidden" data-show-if="isDbReady"></span>
 						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
 						<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
 						<span class="text-zinc-300 font-medium" data-field="dbStatusText">Verifica Compendio SQLite...</span>
@@ -36,56 +34,56 @@
 						</div>
 					</div>
 
-					<!-- Pulsante Login / Utente Collegato -->
-					<div class="flex items-center gap-2">
-						<span class="hidden text-xs text-emerald-400 font-medium" data-field="userEmail" data-show-if="isGoogleLogged"></span>
-						<button class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white shadow" data-action="loginGoogle" data-show-if="isGoogleLoggedOut" type="button">
-							Collega Google Drive
-						</button>
-						<button class="hidden px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" data-show-if="isGoogleLogged" type="button">
-							Disconnetti
+					<!-- Pulsante Login visibile fin dal caricamento HTML -->
+					<button class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow" data-action="loginGoogle" data-role="auth-logged-out" type="button">
+						Login Google Drive
+					</button>
+
+					<!-- Utente connesso + Esci (visibile solo dopo il login) -->
+					<div class="hidden flex items-center gap-2" data-role="auth-logged-in">
+						<span class="text-xs text-emerald-400 font-medium" data-field="userEmail"></span>
+						<button class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" type="button">
+							Esci
 						</button>
 					</div>
 				</div>
 			</div>
 		</header>
 
-		<!-- Main Selection Grid -->
 		<main class="max-w-6xl w-full mx-auto px-4 py-8 sm:py-12 flex-1 flex flex-col justify-center">
 			<div class="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
 				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
 					Scegli la tua postazione di gioco
 				</h2>
 				<p class="text-sm sm:text-base text-zinc-400">
-					Collega il tuo Google Drive per sincronizzare i personaggi e le campagne nel tuo cloud personale, oppure lavora offline in locale.
+					Effettua il login con Google Drive per caricare e salvare i tuoi personaggi e le campagne nel cloud, oppure lavora in locale.
 				</p>
 			</div>
 
-			<!-- Box Centrale Stato Connessione Google Drive -->
+			<!-- Box Centrale Login / Stato Connessione -->
 			<div class="max-w-2xl w-full mx-auto mb-8">
-				<div class="rounded-2xl border border-sky-500/30 bg-sky-950/20 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4" data-show-if="isGoogleLoggedOut">
+				<div class="rounded-2xl border border-sky-500/30 bg-sky-950/20 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4" data-role="auth-logged-out">
 					<div class="text-center sm:text-left">
-						<h3 class="text-sm font-bold text-sky-300">Sincronizzazione Cloud Google Drive non attiva</h3>
+						<h3 class="text-sm font-bold text-sky-300">Accedi al tuo Cloud Personale</h3>
 						<p class="text-xs text-zinc-400 mt-0.5">
-							Collegando il tuo account Google ritroverai automaticamente i tuoi PG e le campagne su tutti i tuoi dispositivi.
+							Collegando Google Drive qui sarai già autenticato sia nella Scheda Giocatore che nello Schermo Master.
 						</p>
 					</div>
 					<button class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white whitespace-nowrap shadow-lg" data-action="loginGoogle" type="button">
-						Accedi con Google Drive
+						Login Google Drive
 					</button>
 				</div>
 
-				<div class="hidden rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3" data-show-if="isGoogleLogged">
+				<div class="hidden rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3" data-role="auth-logged-in">
 					<div class="flex items-center gap-2.5 text-xs">
 						<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
 						<span class="text-zinc-300">Connesso a Google Drive come <strong class="text-emerald-300" data-field="userEmail"></strong></span>
 					</div>
-					<span class="text-[11px] text-zinc-400">Cartella attiva: <code>DND5E_Vault</code></span>
+					<span class="text-[11px] text-zinc-400">Cartella Cloud: <code>DND5E_Vault</code></span>
 				</div>
 			</div>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-				<!-- Card Area Giocatore -->
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-amber-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./pc.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
@@ -106,7 +104,6 @@
 					</ul>
 				</a>
 
-				<!-- Card Area Master -->
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-indigo-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./gm.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
@@ -150,20 +147,14 @@
 			dbService.init();
 
 			driveService.onAuthChange((authState) => {
-				uiBinder.bindFields(document.body, {
-					userEmail: authState.user?.email || ''
-				});
-				uiBinder.bindVisibility(document.body, {
-					isGoogleLogged: authState.authenticated,
-					isGoogleLoggedOut: !authState.authenticated
-				});
+				uiBinder.updateAuthWidget(document.body, authState);
 			});
 
 			uiBinder.bindActions(document.body, {
 				loginGoogle: async () => {
 					try {
 						const profile = await driveService.signIn();
-						showBanner(`Collegato a Google Drive come ${profile.email}!`);
+						showBanner(`Connesso a Google Drive come ${profile.email}!`);
 					} catch (err) {
 						showBanner(err.message);
 					}

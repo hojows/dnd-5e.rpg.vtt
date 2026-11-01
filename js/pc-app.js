@@ -27,16 +27,12 @@ class PlayerAppController {
 
 		// 2. Stato autenticazione Google Drive
 		driveService.onAuthChange(async (authState) => {
-			uiBinder.bindFields(document.body, {
-				userEmail: authState.user?.email || 'Non connesso a Google Drive'
-			});
-			uiBinder.bindVisibility(document.body, {
-				isGoogleLogged: authState.authenticated,
-				isGoogleLoggedOut: !authState.authenticated
-			});
-
+			uiBinder.updateAuthWidget(document.body, authState);
 			if (authState.authenticated) {
 				await this.refreshDriveCharactersList();
+			} else {
+				this.driveCharacterFiles = [];
+				this.renderCharacterSelector();
 			}
 		});
 
