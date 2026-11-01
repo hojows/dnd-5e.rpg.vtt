@@ -9,15 +9,14 @@ import {uiBinder} from './ui-binder.js';
 
 class PlayerAppController {
 	constructor() {
-		this.characters = [];
-		this.activeCharacter = null;
+		this.driveCharacterFiles = []; // [{ id, name, modifiedTime }] letti da Google Drive
+		this.activeCharacter = null;   // Unico PG tenuto nella cache locale
 		this.activeCampaign = null;
-		this.rollAdvantage = 0; // 0 = normale, 1 = vantaggio, -1 = svantaggio
-		this.activeTab = 'combat';
+		this.rollAdvantage = 0;
 	}
 
 	async init() {
-		// 1. Avvia il database SQLite in background (non bloccante)
+		// 1. Avvia il DB SQLite in background
 		dbService.onStatusChange((dbState) => {
 			uiBinder.updateDbStatusWidget(document.body, dbState);
 			if (dbState.status === 'ready' && this.activeCharacter) {
@@ -26,39 +25,64 @@ class PlayerAppController {
 		});
 		dbService.init();
 
-		// 2. Ascolta lo stato di autenticazione Google Drive
-		driveService.onAuthChange((authState) => {
+		// 2. Stato autenticazione Google Drive
+		driveService.onAuthChange(async (authState) => {
 			uiBinder.bindFields(document.body, {
-				userEmail: authState.user?.email || 'Modalità Offline Locale'
+				userEmail: authState.user?.email || 'Non connesso a Google Drive'
 			});
 			uiBinder.bindVisibility(document.body, {
 				isGoogleLogged: authState.authenticated,
 				isGoogleLoggedOut: !authState.authenticated
 			});
+
+			if (authState.authenticated) {
+				await this.refreshDriveCharactersList();
+			}
 		});
 
-		// 3. Configura i listener P2P WebRTC
+		// 3. Listener P2P WebRTC
 		this.setupP2PListeners();
 
-		// 4. Collega le azioni statiche della pagina HTML
+		// 4. Azioni UI
 		uiBinder.bindActions(document.body, this.getGlobalHandlers());
 
-		// 5. Carica i personaggi salvati nel browser
-		await this.loadCharacterVault();
+		// 5. Ripristina l'unico PG attivo dalla cache locale (o crea un PG vuoto)
+		const cachedActive = driveService.getActiveCharacterWorkingCopy();
+		if (cachedActive) {
+			await this.setActiveCharacter(cachedActive, false);
+		} else {
+			await this.createNewBlankCharacter();
+		}
+
+		// 6. Se l'utente non è collegato a Google Drive, avvisa subito di collegarsi per caricare/salvare i PG
+		if (!driveService.isAuthenticated()) {
+			this.showBanner('Clicca su \'Collega Google Drive\' in alto a destra per caricare o salvare i tuoi PG nel cloud.');
+		}
 	}
 
 	// =========================================================================
-	// GESTIONE GARAGE PERSONAGGI E CAMPAGNA CONDIVISA
+	// SINCRONIZZAZIONE CON GOOGLE DRIVE E CACHE DEL SINGOLO PG ATTIVO
 	// =========================================================================
 
-	async loadCharacterVault() {
-		this.characters = await driveService.getAllLocalRecords('characters');
-		this.renderCharacterSelector();
+	async refreshDriveCharactersList() {
+		if (!driveService.isAuthenticated()) return;
+		try {
+			this.driveCharacterFiles = await driveService.listCharactersOnDrive();
+			this.renderCharacterSelector();
 
-		if (this.characters.length > 0 && !this.activeCharacter) {
-			await this.selectCharacter(this.characters[0].localId);
-		} else if (this.characters.length === 0) {
-			await this.createNewBlankCharacter();
+			// Se avevamo solo il PG vuoto iniziale e su Drive ci sono già PG salvati, carica automaticamente il più recente
+			const isInitialBlank =
+				this.activeCharacter &&
+				!this.activeCharacter.driveFileId &&
+				this.activeCharacter.name === 'Nuovo Avventuriero';
+
+			if (isInitialBlank && this.driveCharacterFiles.length > 0) {
+				const loaded = await driveService.loadCharacterFromDrive(this.driveCharacterFiles[0].id);
+				await this.setActiveCharacter(loaded, false);
+				this.showBanner(`Personaggio "${loaded.name}" caricato da Google Drive!`);
+			}
+		} catch (err) {
+			this.showBanner(err.message, true);
 		}
 	}
 
@@ -67,33 +91,41 @@ class PlayerAppController {
 		if (!selectEl) return;
 		selectEl.replaceChildren();
 
-		this.characters.forEach((ch) => {
+		// Mostra sempre il PG attualmente aperto in locale in cima
+		if (this.activeCharacter) {
+			const currentOpt = document.createElement('option');
+			currentOpt.value = this.activeCharacter.driveFileId || '__LOCAL_ACTIVE__';
+			const dirtyTag = this.activeCharacter._dirty ? ' * (Non salvato)' : '';
+			currentOpt.textContent = `${this.activeCharacter.name || 'Senza Nome'} (Liv. ${this.activeCharacter.level || 1})${dirtyTag}`;
+			currentOpt.selected = true;
+			selectEl.appendChild(currentOpt);
+		}
+
+		// Aggiungi gli altri PG presenti su Google Drive (senza scaricarli in cache finché non vengono selezionati)
+		this.driveCharacterFiles.forEach((file) => {
+			if (this.activeCharacter && file.id === this.activeCharacter.driveFileId) return;
 			const opt = document.createElement('option');
-			opt.value = ch.localId;
-			opt.textContent = `${ch.name || 'Senza Nome'} (Liv. ${ch.level || 1})`;
-			if (this.activeCharacter && ch.localId === this.activeCharacter.localId) {
-				opt.selected = true;
-			}
+			opt.value = file.id;
+			const readableName = file.name.replace(/^PG_/, '').replace(/_pc_.*\.json$/, '').replace(/_/g, ' ');
+			opt.textContent = `☁️ ${readableName}`;
 			selectEl.appendChild(opt);
 		});
 	}
 
-	async selectCharacter(localId) {
-		const found = this.characters.find((c) => c.localId === localId);
-		if (!found) return;
-		this.activeCharacter = found;
-		this.activeCampaign = null;
+	async setActiveCharacter(character, markDirty = false) {
+		this.activeCharacter = character;
+		driveService.saveActiveCharacterWorkingCopy(this.activeCharacter, markDirty);
+		this.updateSaveStatusIndicator();
+		this.renderCharacterSelector();
 
-		if (found.campaignId) {
-			// Se il PG appartiene a una campagna, scarica eventuali aggiornamenti dal Drive del Master (anche per gli assenti)
+		if (character.campaignDriveFileId) {
 			try {
-				this.activeCampaign = await driveService.refreshSharedCampaign(
-					found.campaignId,
-					found.campaignDriveFileId
-				);
+				this.activeCampaign = await driveService.refreshSharedCampaign(character.campaignDriveFileId);
 			} catch (_) {
-				this.activeCampaign = await driveService.getLocalRecord('campaigns', found.campaignId);
+				this.activeCampaign = driveService.getActiveCampaignWorkingCopy();
 			}
+		} else {
+			this.activeCampaign = null;
 		}
 
 		await this.renderActiveSheet();
@@ -103,6 +135,7 @@ class PlayerAppController {
 	async createNewBlankCharacter() {
 		const blank = {
 			localId: `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+			driveFileId: null,
 			name: 'Nuovo Avventuriero',
 			level: 1,
 			experience: 0,
@@ -122,16 +155,45 @@ class PlayerAppController {
 			notes: ''
 		};
 
-		await driveService.saveCharacter(blank);
-		this.characters.push(blank);
-		this.renderCharacterSelector();
-		await this.selectCharacter(blank.localId);
+		await this.setActiveCharacter(blank, true);
 	}
 
 	/**
-	 * Se un XML è stato importato mentre il DB SQLite stava ancora scaricando,
-	 * allinea automaticamente gli ID non appena il Worker comunica "ready".
+	 * Aggiorna la copia di lavoro locale (unico PG in cache) e invia in P2P se connesso.
 	 */
+	async markModifiedAndSyncLocal(reason = 'manual_edit') {
+		if (!this.activeCharacter) return;
+		driveService.saveActiveCharacterWorkingCopy(this.activeCharacter, true);
+		this.updateSaveStatusIndicator();
+		this.renderCharacterSelector();
+		p2pService.sendCharacterUpdateToMaster(this.activeCharacter, reason);
+	}
+
+	/**
+	 * Salva esplicitamente il PG attivo su Google Drive.
+	 */
+	async saveActiveCharacterToCloud() {
+		if (!this.activeCharacter) return;
+		try {
+			if (!driveService.isAuthenticated()) {
+				await driveService.signIn();
+			}
+			await driveService.saveCharacterToDrive(this.activeCharacter);
+			await this.refreshDriveCharactersList();
+			this.updateSaveStatusIndicator();
+			this.showBanner(`"${this.activeCharacter.name}" salvato su Google Drive!`);
+		} catch (err) {
+			this.showBanner(err.message, true);
+		}
+	}
+
+	updateSaveStatusIndicator() {
+		const isDirty = Boolean(this.activeCharacter?._dirty);
+		uiBinder.bindFields(document.body, {
+			saveStatusText: isDirty ? 'Modifiche locali non salvate su Drive' : 'Salvato su Drive'
+		});
+	}
+
 	async reconcileUnresolvedIdsAndRender() {
 		if (!this.activeCharacter || !dbService.isReady()) {
 			await this.renderActiveSheet();
@@ -162,17 +224,10 @@ class PlayerAppController {
 		await resolveList(this.activeCharacter.feats, 'feats');
 
 		if (modified) {
-			await this.persistCharacter('db_reconcile');
+			await this.markModifiedAndSyncLocal('db_reconcile');
 		}
 		await this.renderActiveSheet();
 		await this.renderCampaignShop();
-	}
-
-	async persistCharacter(reason = 'manual_edit') {
-		if (!this.activeCharacter) return;
-		await driveService.saveCharacter(this.activeCharacter);
-		this.renderCharacterSelector();
-		p2pService.sendCharacterUpdateToMaster(this.activeCharacter, reason);
 	}
 
 	async renderActiveSheet() {
@@ -185,10 +240,6 @@ class PlayerAppController {
 			this.getSheetItemHandlers()
 		);
 	}
-
-	// =========================================================================
-	// NEGOZIO DI CAMPAGNA (DOWNTIME TRA LE SESSIONI)
-	// =========================================================================
 
 	async renderCampaignShop() {
 		const shopContainer = document.querySelector('[data-list="campaign-shop"]');
@@ -227,7 +278,7 @@ class PlayerAppController {
 								item.shopItemId,
 								1
 							);
-							await this.persistCharacter('shop_purchase');
+							await this.markModifiedAndSyncLocal('shop_purchase');
 							await this.renderActiveSheet();
 							await this.renderCampaignShop();
 						} catch (err) {
@@ -240,25 +291,21 @@ class PlayerAppController {
 		);
 	}
 
-	// =========================================================================
-	// CONNESSIONE P2P WEBRTC COL MASTER
-	// =========================================================================
-
 	setupP2PListeners() {
 		p2pService.on('STATUS_CHANGE', (st) => {
 			uiBinder.bindFields(document.body, {
 				p2pStatusText:
 					st.status === 'connected'
-					? 'Connesso al Master (Live)'
+					? '🟢 Connesso al Master (Live)'
 					: st.status === 'connecting'
-					  ? 'Connessione P2P in corso...'
-					  : 'P2P Disconnesso (Offline/Downtime)'
+					  ? '🟡 Connessione P2P in corso...'
+					  : '⚪ P2P Disconnesso (Offline/Downtime)'
 			});
 		});
 
 		p2pService.on('CAMPAIGN_RECEIVED', async (freshCampaign) => {
 			this.activeCampaign = freshCampaign;
-			await driveService.saveCampaignManifest({...freshCampaign, isMasterCopy: false});
+			driveService.saveActiveCampaignWorkingCopy(freshCampaign, false);
 			await this.renderActiveSheet();
 			await this.renderCampaignShop();
 			this.showBanner('Il Master ha aggiornato le regole e il negozio della campagna!');
@@ -267,7 +314,7 @@ class PlayerAppController {
 		p2pService.on('GM_OVERRIDE_RECEIVED', async (patch) => {
 			if (!this.activeCharacter || !patch) return;
 			Object.assign(this.activeCharacter, patch);
-			await this.persistCharacter('gm_override');
+			await this.markModifiedAndSyncLocal('gm_override');
 			await this.renderActiveSheet();
 			this.showBanner('Il Master ha aggiornato la tua scheda.');
 		});
@@ -306,20 +353,16 @@ class PlayerAppController {
 		bannerEl.textContent = message;
 		bannerEl.classList.remove('hidden');
 		bannerEl.dataset.variant = isError ? 'error' : 'info';
-		setTimeout(() => bannerEl.classList.add('hidden'), 4500);
+		setTimeout(() => bannerEl.classList.add('hidden'), 5000);
 	}
-
-	// =========================================================================
-	// MAPPA DEGLI HANDLER DEGLI EVENTI (DATA-ACTION)
-	// =========================================================================
 
 	getGlobalHandlers() {
 		return {
 			loginGoogle: async () => {
 				try {
 					await driveService.signIn();
-					await this.persistCharacter('google_login_sync');
-					this.showBanner('Google Drive collegato con successo!');
+					await this.refreshDriveCharactersList();
+					this.showBanner('Google Drive collegato!');
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -329,6 +372,10 @@ class PlayerAppController {
 				driveService.signOut();
 			},
 
+			saveCharacterExplicit: async () => {
+				await this.saveActiveCharacterToCloud();
+			},
+
 			switchLanguage: async (evt, el) => {
 				await dbService.setLanguage(el.value);
 				await this.renderActiveSheet();
@@ -336,10 +383,35 @@ class PlayerAppController {
 			},
 
 			changeActiveCharacter: async (evt, el) => {
-				await this.selectCharacter(el.value);
+				const selectedDriveId = el.value;
+				if (!selectedDriveId || selectedDriveId === '__LOCAL_ACTIVE__') return;
+
+				if (this.activeCharacter?._dirty) {
+					const confirmSwitch = window.confirm(
+						'Hai modifiche non salvate su Google Drive per il PG attuale. Vuoi cambiare personaggio comunque (la cache locale verrà sostituita col nuovo PG)?'
+					);
+					if (!confirmSwitch) {
+						this.renderCharacterSelector();
+						return;
+					}
+				}
+
+				try {
+					const loaded = await driveService.loadCharacterFromDrive(selectedDriveId);
+					await this.setActiveCharacter(loaded, false);
+					this.showBanner(`Personaggio "${loaded.name}" caricato in memoria!`);
+				} catch (err) {
+					this.showBanner(err.message, true);
+				}
 			},
 
 			newCharacter: async () => {
+				if (this.activeCharacter?._dirty) {
+					const ok = window.confirm(
+						'Creando un nuovo PG sostituirai quello attuale nella cache locale. Continuare?'
+					);
+					if (!ok) return;
+				}
 				await this.createNewBlankCharacter();
 			},
 
@@ -353,11 +425,8 @@ class PlayerAppController {
 				try {
 					const xmlText = await file.text();
 					const imported = await fc5eImporter.parseXmlString(xmlText);
-					await driveService.saveCharacter(imported);
-					this.characters.push(imported);
-					this.renderCharacterSelector();
-					await this.selectCharacter(imported.localId);
-					this.showBanner(`Personaggio "${imported.name}" importato da Fight Club 5e!`);
+					await this.setActiveCharacter(imported, true);
+					this.showBanner(`"${imported.name}" importato! Clicca su 'Salva PG' per salvarlo su Google Drive.`);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				} finally {
@@ -374,14 +443,13 @@ class PlayerAppController {
 					manifest.driveFileId = picked.driveFileId;
 					manifest.isMasterCopy = false;
 
-					await driveService.saveLocalRecord('campaigns', manifest);
+					driveService.saveActiveCampaignWorkingCopy(manifest, false);
 					this.activeCampaign = manifest;
 
 					this.activeCharacter.campaignId = manifest.campaignId;
 					this.activeCharacter.campaignDriveFileId = picked.driveFileId;
-					await this.persistCharacter('linked_to_campaign');
+					await this.saveActiveCharacterToCloud();
 
-					// Condivide automaticamente il file del PG in sola lettura con l'email del Master
 					if (this.activeCharacter.driveFileId && manifest.masterEmail) {
 						await driveService.shareFileReadOnly(
 							this.activeCharacter.driveFileId,
@@ -391,7 +459,7 @@ class PlayerAppController {
 
 					await this.renderActiveSheet();
 					await this.renderCampaignShop();
-					this.showBanner(`Personaggio associato alla campagna "${manifest.campaignName}"!`);
+					this.showBanner(`PG associato alla campagna "${manifest.campaignName}"!`);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -399,10 +467,10 @@ class PlayerAppController {
 
 			connectP2P: () => {
 				const campId =
-					this.activeCharacter?.campaignId ||
-					document.querySelector('[data-field="manualRoomId"]')?.value;
+					document.querySelector('[data-field="manualRoomId"]')?.value?.trim() ||
+					this.activeCharacter?.campaignId;
 				if (!campId) {
-					this.showBanner('Collega prima una campagna o inserisci il codice stanza.', true);
+					this.showBanner('Collega prima una campagna da Drive o incolla l\'ID Stanza del Master.', true);
 					return;
 				}
 				p2pService.connectAsPlayerClient(campId, {
@@ -474,7 +542,7 @@ class PlayerAppController {
 							} else if (r.category === 'feats') {
 								this.activeCharacter.feats.push({dbId: r.id, isCustom: false});
 							}
-							await this.persistCharacter('compendium_add');
+							await this.markModifiedAndSyncLocal('compendium_add');
 							await this.renderActiveSheet();
 							this.showBanner(`"${r.name}" aggiunto alla scheda!`);
 						}
@@ -489,7 +557,8 @@ class PlayerAppController {
 			updateBasicField: async (evt, el) => {
 				const field = el.getAttribute('data-field');
 				if (!field || !this.activeCharacter) return;
-				const val = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+				const val =
+					      el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
 
 				const parts = field.split('.');
 				if (parts.length === 2) {
@@ -499,14 +568,14 @@ class PlayerAppController {
 					this.activeCharacter[field] = val;
 				}
 
-				await this.persistCharacter('field_edit');
+				await this.markModifiedAndSyncLocal('field_edit');
 				await this.renderActiveSheet();
 			},
 
 			updateAbilityScore: async (evt, el, ctx) => {
 				if (!ctx?.abilityKey) return;
 				this.activeCharacter.abilities[ctx.abilityKey] = Number(el.value) || 10;
-				await this.persistCharacter('ability_edit');
+				await this.markModifiedAndSyncLocal('ability_edit');
 				await this.renderActiveSheet();
 			},
 
@@ -525,20 +594,20 @@ class PlayerAppController {
 			toggleSpellPrepared: async (evt, el, ctx) => {
 				if (!ctx || !this.activeCharacter.spells[ctx.index]) return;
 				this.activeCharacter.spells[ctx.index].prepared = Boolean(el.checked);
-				await this.persistCharacter('spell_prepared');
+				await this.markModifiedAndSyncLocal('spell_prepared');
 			},
 
 			toggleItemEquipped: async (evt, el, ctx) => {
 				if (!ctx || !this.activeCharacter.items[ctx.index]) return;
 				this.activeCharacter.items[ctx.index].equipped = Boolean(el.checked);
-				await this.persistCharacter('item_equipped');
+				await this.markModifiedAndSyncLocal('item_equipped');
 			},
 
 			removeListItem: async (evt, el, ctx) => {
 				const listType = el.getAttribute('data-list-type');
 				if (!listType || !ctx || !Array.isArray(this.activeCharacter[listType])) return;
 				this.activeCharacter[listType].splice(ctx.index, 1);
-				await this.persistCharacter('item_removed');
+				await this.markModifiedAndSyncLocal('item_removed');
 				await this.renderActiveSheet();
 			}
 		};

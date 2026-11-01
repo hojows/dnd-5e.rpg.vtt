@@ -8,9 +8,9 @@ import {uiBinder} from './ui-binder.js';
 
 class MasterAppController {
 	constructor() {
-		this.campaigns = [];
+		this.driveCampaignFiles = [];
 		this.activeCampaign = null;
-		this.partyCharacters = new Map(); // localId -> { character, peerId, audit }
+		this.partyCharacters = new Map();
 	}
 
 	async init() {
@@ -22,35 +22,52 @@ class MasterAppController {
 		});
 		dbService.init();
 
-		driveService.onAuthChange((authState) => {
+		driveService.onAuthChange(async (authState) => {
 			uiBinder.bindFields(document.body, {
-				userEmail: authState.user?.email || 'Master Offline'
+				userEmail: authState.user?.email || 'Master Non Connesso'
 			});
 			uiBinder.bindVisibility(document.body, {
 				isGoogleLogged: authState.authenticated,
 				isGoogleLoggedOut: !authState.authenticated
 			});
+
+			if (authState.authenticated) {
+				await this.refreshDriveCampaignsList();
+			}
 		});
 
 		this.setupP2PListeners();
 		uiBinder.bindActions(document.body, this.getGlobalHandlers());
 
-		await this.loadCampaigns();
+		const cachedCamp = driveService.getActiveCampaignWorkingCopy();
+		if (cachedCamp && cachedCamp.isMasterCopy !== false) {
+			await this.setActiveCampaign(cachedCamp);
+		} else {
+			await this.createNewCampaign();
+		}
+
+		if (!driveService.isAuthenticated()) {
+			this.showBanner('Clicca su \'Collega Google Drive\' in alto a destra per salvare o caricare le tue Campagne.');
+		}
 	}
 
-	// =========================================================================
-	// GESTIONE MANIFESTO DI CAMPAGNA E NEGOZIO DEL MASTER
-	// =========================================================================
+	async refreshDriveCampaignsList() {
+		if (!driveService.isAuthenticated()) return;
+		try {
+			this.driveCampaignFiles = await driveService.listCampaignsOnDrive();
+			this.renderCampaignSelector();
 
-	async loadCampaigns() {
-		const all = await driveService.getAllLocalRecords('campaigns');
-		this.campaigns = all.filter((c) => c.isMasterCopy !== false);
-		this.renderCampaignSelector();
+			const isInitialBlank =
+				this.activeCampaign &&
+				!this.activeCampaign.driveFileId &&
+				this.activeCampaign.campaignName === 'Nuova Campagna';
 
-		if (this.campaigns.length > 0 && !this.activeCampaign) {
-			await this.selectCampaign(this.campaigns[0].campaignId);
-		} else if (this.campaigns.length === 0) {
-			await this.createNewCampaign();
+			if (isInitialBlank && this.driveCampaignFiles.length > 0) {
+				const loaded = await driveService.loadCampaignFromDrive(this.driveCampaignFiles[0].id);
+				await this.setActiveCampaign(loaded);
+			}
+		} catch (err) {
+			this.showBanner(err.message, true);
 		}
 	}
 
@@ -59,35 +76,38 @@ class MasterAppController {
 		if (!selectEl) return;
 		selectEl.replaceChildren();
 
-		this.campaigns.forEach((camp) => {
+		if (this.activeCampaign) {
 			const opt = document.createElement('option');
-			opt.value = camp.campaignId;
-			opt.textContent = `${camp.campaignName} (Max Liv. ${camp.rules?.maxLevel || 1})`;
-			if (this.activeCampaign && camp.campaignId === this.activeCampaign.campaignId) {
-				opt.selected = true;
-			}
+			opt.value = this.activeCampaign.driveFileId || '__LOCAL_CAMP__';
+			opt.textContent = `${this.activeCampaign.campaignName} (Max Liv. ${this.activeCampaign.rules?.maxLevel || 1})`;
+			opt.selected = true;
+			selectEl.appendChild(opt);
+		}
+
+		this.driveCampaignFiles.forEach((f) => {
+			if (this.activeCampaign && f.id === this.activeCampaign.driveFileId) return;
+			const opt = document.createElement('option');
+			opt.value = f.id;
+			opt.textContent = `☁️ ${f.name.replace(/^CAMP_/, '').replace(/_camp_.*\.json$/, '').replace(/_/g, ' ')}`;
 			selectEl.appendChild(opt);
 		});
+	}
+
+	async setActiveCampaign(campaign) {
+		this.activeCampaign = campaign;
+		driveService.saveActiveCampaignWorkingCopy(campaign, false);
+		this.renderCampaignSelector();
+		this.renderCampaignSettings();
+		await this.renderShopManager();
+		await this.renderShopCatalogBuilder();
+		this.renderPartyDashboard();
 	}
 
 	async createNewCampaign() {
 		const masterEmail = driveService.userProfile?.email || '';
 		const manifest = rulesGuard.createDefaultCampaignManifest('Nuova Campagna', masterEmail);
 		manifest.isMasterCopy = true;
-
-		await driveService.saveCampaignManifest(manifest);
-		this.campaigns.push(manifest);
-		this.renderCampaignSelector();
-		await this.selectCampaign(manifest.campaignId);
-	}
-
-	async selectCampaign(campaignId) {
-		const found = this.campaigns.find((c) => c.campaignId === campaignId);
-		if (!found) return;
-		this.activeCampaign = found;
-		this.renderCampaignSettings();
-		await this.renderShopManager();
-		this.renderPartyDashboard();
+		await this.setActiveCampaign(manifest);
 	}
 
 	renderCampaignSettings() {
@@ -105,13 +125,17 @@ class MasterAppController {
 
 	async saveAndBroadcastCampaign() {
 		if (!this.activeCampaign) return;
-		if (driveService.userProfile?.email) {
-			this.activeCampaign.masterEmail = driveService.userProfile.email;
-		}
-		await driveService.saveCampaignManifest(this.activeCampaign);
-		this.renderCampaignSelector();
+		driveService.saveActiveCampaignWorkingCopy(this.activeCampaign, true);
 		p2pService.pushCampaignUpdateToParty(this.activeCampaign);
-		this.showBanner('Campagna salvata su Drive e inviata in push a tutti i giocatori connessi!');
+
+		if (driveService.isAuthenticated()) {
+			this.activeCampaign.masterEmail = driveService.userProfile?.email || '';
+			await driveService.saveCampaignToDrive(this.activeCampaign);
+			await this.refreshDriveCampaignsList();
+			this.showBanner('Campagna salvata su Google Drive e inviata in push al Party!');
+		} else {
+			this.showBanner('Regole aggiornate in locale (Collegati a Google Drive per salvarle in cloud).');
+		}
 	}
 
 	async renderShopManager() {
@@ -192,17 +216,13 @@ class MasterAppController {
 		});
 	}
 
-	// =========================================================================
-	// DASHBOARD PARTY, AUDIT SNAPSHOT E ISPEZIONE SCHEDE PG
-	// =========================================================================
-
 	setupP2PListeners() {
 		p2pService.on('STATUS_CHANGE', (st) => {
 			uiBinder.bindFields(document.body, {
 				p2pHostStatus:
 					st.status === 'hosting'
-					? `Stanza P2P Attiva (${st.roomId})`
-					: 'Stanza P2P Non Avviata'
+					? `🟢 Stanza P2P Attiva (ID: ${this.activeCampaign?.campaignId})`
+					: '⚪ Stanza P2P Non Avviata'
 			});
 		});
 
@@ -211,7 +231,6 @@ class MasterAppController {
 			const audit = rulesGuard.auditCharacter(character, this.activeCampaign);
 			this.partyCharacters.set(character.localId, {character, peerId, audit});
 			this.renderPartyDashboard();
-			// Invia subito al giocatore il manifesto aggiornato della campagna
 			p2pService.sendToPlayer(peerId, {
 				type: 'CAMPAIGN_PUSH',
 				campaign: this.activeCampaign,
@@ -291,7 +310,7 @@ class MasterAppController {
 		bannerEl.textContent = message;
 		bannerEl.classList.remove('hidden');
 		bannerEl.dataset.variant = isError ? 'error' : 'info';
-		setTimeout(() => bannerEl.classList.add('hidden'), 4500);
+		setTimeout(() => bannerEl.classList.add('hidden'), 5000);
 	}
 
 	getGlobalHandlers() {
@@ -299,7 +318,8 @@ class MasterAppController {
 			loginGoogle: async () => {
 				try {
 					await driveService.signIn();
-					await this.saveAndBroadcastCampaign();
+					await this.refreshDriveCampaignsList();
+					this.showBanner('Google Drive collegato!');
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -314,7 +334,15 @@ class MasterAppController {
 			},
 
 			changeActiveCampaign: async (evt, el) => {
-				await this.selectCampaign(el.value);
+				const driveId = el.value;
+				if (!driveId || driveId === '__LOCAL_CAMP__') return;
+				try {
+					const loaded = await driveService.loadCampaignFromDrive(driveId);
+					await this.setActiveCampaign(loaded);
+					this.showBanner(`Campagna "${loaded.campaignName}" caricata da Drive!`);
+				} catch (err) {
+					this.showBanner(err.message, true);
+				}
 			},
 
 			newCampaign: async () => {
@@ -331,7 +359,8 @@ class MasterAppController {
 					this.activeCampaign.rules[ruleKey] =
 						el.type === 'checkbox' ? el.checked : Number(el.value);
 				}
-				await this.saveAndBroadcastCampaign();
+				driveService.saveActiveCampaignWorkingCopy(this.activeCampaign, true);
+				this.renderCampaignSelector();
 			},
 
 			shareCampaignWithPlayerEmail: async () => {
@@ -340,8 +369,11 @@ class MasterAppController {
 				if (!email) return;
 
 				try {
+					if (!driveService.isAuthenticated()) {
+						await driveService.signIn();
+					}
 					if (!this.activeCampaign.driveFileId) {
-						await this.saveAndBroadcastCampaign();
+						await driveService.saveCampaignToDrive(this.activeCampaign);
 					}
 					await driveService.shareFileReadOnly(this.activeCampaign.driveFileId, email);
 					input.value = '';
