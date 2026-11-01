@@ -1,8 +1,8 @@
 // js/config.js
 
 export const APP_CONFIG = {
-	GOOGLE_CLIENT_ID: 'IL_TUO_CLIENT_ID.apps.googleusercontent.com',
-	GOOGLE_API_KEY: 'LA_TUA_API_KEY_PUBBLICA',
+	GOOGLE_CLIENT_ID: '877024851125-nekkss6jois626hq4v4a529nb3jdtclr.apps.googleusercontent.com',
+	GOOGLE_API_KEY: 'AIzaSyDsoUVsMU6RrylDdQnFohJcJ_W61fba1Gg',
 
 	DRIVE_VAULT_FOLDER: 'DND5E_Vault',
 
