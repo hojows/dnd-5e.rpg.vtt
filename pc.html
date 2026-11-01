@@ -570,6 +570,55 @@
 				</div>
 			</div>
 		</template>
+		<template id="tpl-shop-item-row">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-3.5 flex flex-col justify-between gap-2">
+				<div>
+					<div class="flex items-start justify-between gap-2">
+						<span class="font-bold text-sm text-white" data-field="name">Oggetto in Vendita</span>
+						<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-bold whitespace-nowrap" data-field="priceLabel">0 mo</span>
+					</div>
+					<span class="block text-[11px] text-zinc-400 mt-0.5" data-field="stockLabel">Disponibili: 1</span>
+					<p class="text-xs text-zinc-400 mt-2 line-clamp-3" data-field="description"></p>
+				</div>
+				<button class="w-full py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold" data-action="buyShopItem" type="button">
+					Acquista (Scala Oro)
+				</button>
+			</div>
+		</template>
+
+		<template id="tpl-compendium-result-row">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 flex items-center justify-between gap-2">
+				<div>
+					<div class="flex items-center gap-2">
+						<span class="font-bold text-xs text-white" data-field="name">Voce</span>
+						<span class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-amber-400 uppercase" data-field="category">spells</span>
+						<span class="text-[10px] text-zinc-500" data-field="source">PHB</span>
+					</div>
+					<p class="text-[11px] text-zinc-400" data-field="details"></p>
+				</div>
+				<button class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold whitespace-nowrap" data-action="addCompendiumEntryToCharacter" type="button">
+					+ Aggiungi
+				</button>
+			</div>
+		</template>
+
+		<template id="tpl-dice-log-row">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/90 p-2.5 text-xs flex items-center justify-between gap-2">
+				<div>
+					<div class="flex items-center gap-1.5">
+						<strong class="text-amber-400" data-field="rollerName">Giocatore</strong>
+						<span class="text-zinc-500">&bull;</span>
+						<span class="text-[10px] text-zinc-500" data-field="time">00:00</span>
+						<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold" data-field="advantageBadge" data-show-if="hasAdvantageBadge"></span>
+					</div>
+					<div class="text-zinc-300 font-medium" data-field="rollLabel">Lancio</div>
+					<div class="text-[11px] text-zinc-500"><span data-field="notation">1d20</span> &rarr; <span data-field="rollsBreakdown">[10]</span></div>
+				</div>
+				<div class="text-xl font-black text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800" data-field="total">
+					20
+				</div>
+			</div>
+		</template>
 
 		<script src="./js/pc-app.js" type="module"></script>
 	</body>
