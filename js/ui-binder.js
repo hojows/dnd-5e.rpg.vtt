@@ -1,4 +1,4 @@
-// js/ui-binder.js
+import {APP_CONFIG} from './config.js';
 import {dbService} from './db-service.js';
 import {driveService} from './drive-service.js';
 import {CORE_ABILITIES, CORE_SKILLS, evaluateFormula, getAbilityModifier} from './formula-engine.js';
@@ -171,6 +171,10 @@ class DomUiBinder {
 
 		rootEl.querySelectorAll('[data-field="userEmail"]').forEach((el) => {
 			el.textContent = userEmail;
+		});
+
+		rootEl.querySelectorAll('[data-field="vaultFolder"]').forEach((el) => {
+			el.textContent = APP_CONFIG.DRIVE_VAULT_FOLDER || '';
 		});
 
 		const showAvatarImg = isLogged && Boolean(pictureUrl);
