@@ -2,6 +2,7 @@
 import {dbService} from './db-service.js';
 import {diceEngine} from './dice-engine.js';
 import {driveService} from './drive-service.js';
+import {i18nService} from './i18n-service.js';
 import {fc5eImporter} from './importers/fc5e-xml-importer.js';
 import {p2pService} from './p2p-service.js';
 import {rulesGuard} from './rules-guard.js';
@@ -14,7 +15,7 @@ class PlayerAppController {
 		this.activeCampaign = null;
 		this.rollAdvantage = 0;
 		this.sessionState = {
-			connectionStatus: 'disconnected', // "disconnected" | "connecting" | "connected"
+			connectionStatus: 'disconnected',
 			masterRoomAvailable: false
 		};
 	}
@@ -26,7 +27,8 @@ class PlayerAppController {
 				this.reconcileUnresolvedIdsAndRender();
 			}
 		});
-		dbService.init();
+
+		await dbService.init();
 
 		driveService.onAuthChange(async (authState) => {
 			uiBinder.updateAuthWidget(document.body, authState);
@@ -44,14 +46,14 @@ class PlayerAppController {
 
 		const cachedActive = driveService.getActiveCharacterWorkingCopy();
 		if (cachedActive) {
-			await this.setActiveCharacter(cachedActive, false);
+			await this.setActiveCharacter(cachedActive, Boolean(cachedActive._dirty));
 		} else {
 			await this.createNewBlankCharacter();
 		}
 	}
 
 	// =========================================================================
-	// BARRA CAMPAGNA E INDICATORE STATO SESSIONE P2P
+	// CAMPAIGN BAR & P2P SESSION STATUS INDICATOR
 	// =========================================================================
 
 	updateCampaignAndSessionBar() {
@@ -63,17 +65,20 @@ class PlayerAppController {
 		const isConnecting = this.sessionState.connectionStatus === 'connecting';
 		const isSessionAvailable = Boolean(this.sessionState.masterRoomAvailable);
 
-		let indicatorLabel = 'Sessione Non Attiva (Master Offline)';
+		let indicatorLabel = i18nService.t('pc.sessionOffline', 'Session Offline (GM Offline)');
 		if (isConnected) {
-			indicatorLabel = 'Connesso alla Sessione Live';
+			indicatorLabel = i18nService.t('pc.sessionConnected', 'Connected to Live Session');
 		} else if (isConnecting) {
-			indicatorLabel = 'Connessione alla Sessione in corso...';
+			indicatorLabel = i18nService.t('pc.sessionConnecting', 'Connecting to live session...');
 		} else if (isSessionAvailable) {
-			indicatorLabel = 'Sessione Attiva (Master Online)';
+			indicatorLabel = i18nService.t('pc.sessionReady', 'Session Active (GM Online)');
 		}
 
 		uiBinder.bindFields(barEl, {
-			linkedCampaignName: this.activeCampaign?.campaignName || this.activeCharacter?.campaignName || 'Campagna Associata',
+			linkedCampaignName:
+				this.activeCampaign?.campaignName ||
+				this.activeCharacter?.campaignName ||
+				'-',
 			sessionStatusText: indicatorLabel
 		});
 
@@ -93,7 +98,7 @@ class PlayerAppController {
 	}
 
 	// =========================================================================
-	// GESTIONE PG ATTIVO E DRIVE
+	// ACTIVE CHARACTER & GOOGLE DRIVE SYNC
 	// =========================================================================
 
 	async refreshDriveCharactersList() {
@@ -102,15 +107,22 @@ class PlayerAppController {
 			this.driveCharacterFiles = await driveService.listCharactersOnDrive();
 			this.renderCharacterSelector();
 
+			const defaultEngName = 'New Adventurer';
+			const defaultItaName = 'Nuovo Avventuriero';
 			const isInitialBlank =
 				this.activeCharacter &&
 				!this.activeCharacter.driveFileId &&
-				this.activeCharacter.name === 'Nuovo Avventuriero';
+				(this.activeCharacter.name === defaultEngName ||
+				 this.activeCharacter.name === defaultItaName);
 
 			if (isInitialBlank && this.driveCharacterFiles.length > 0) {
 				const loaded = await driveService.loadCharacterFromDrive(this.driveCharacterFiles[0].id);
 				await this.setActiveCharacter(loaded, false);
-				this.showBanner(`Personaggio "${loaded.name}" caricato da Google Drive!`);
+				this.showBanner(
+					i18nService.t('pc.toastDriveLoaded', 'Character "{name}" loaded from Google Drive!', {
+						name: loaded.name
+					})
+				);
 			}
 		} catch (err) {
 			this.showBanner(err.message, true);
@@ -122,11 +134,16 @@ class PlayerAppController {
 		if (!selectEl) return;
 		selectEl.replaceChildren();
 
+		const lvShort = i18nService.t('common.levelShort', 'Lv.');
+		const unsavedHint = i18nService.t('pc.unsavedHint', '* (Unsaved)');
+
 		if (this.activeCharacter) {
 			const currentOpt = document.createElement('option');
 			currentOpt.value = this.activeCharacter.driveFileId || '__LOCAL_ACTIVE__';
-			const dirtyTag = this.activeCharacter._dirty ? ' * (Non salvato)' : '';
-			currentOpt.textContent = `${this.activeCharacter.name || 'Senza Nome'} (Liv. ${this.activeCharacter.level || 1})${dirtyTag}`;
+			const dirtyTag = this.activeCharacter._dirty ? ` ${unsavedHint}` : '';
+			currentOpt.textContent = `${this.activeCharacter.name || '-'} (${lvShort} ${
+				                                                                          this.activeCharacter.level || 1
+			})${dirtyTag}`;
 			currentOpt.selected = true;
 			selectEl.appendChild(currentOpt);
 		}
@@ -135,14 +152,16 @@ class PlayerAppController {
 			if (this.activeCharacter && file.id === this.activeCharacter.driveFileId) return;
 			const opt = document.createElement('option');
 			opt.value = file.id;
-			const readableName = file.name.replace(/^PG_/, '').replace(/_pc_.*\.json$/, '').replace(/_/g, ' ');
+			const readableName = file.name
+			                         .replace(/^PG_/, '')
+			                         .replace(/_pc_.*\.json\$/, '')
+			                         .replace(/_/g, ' ');
 			opt.textContent = `☁️ ${readableName}`;
 			selectEl.appendChild(opt);
 		});
 	}
 
 	async setActiveCharacter(character, markDirty = false) {
-		// Se stavamo connessi in P2P con un altro PG, disconnettiamoci prima
 		if (this.sessionState.connectionStatus !== 'disconnected') {
 			p2pService.disconnectPlayerClient(true, this.activeCharacter?.localId);
 		}
@@ -157,14 +176,15 @@ class PlayerAppController {
 		if (character.campaignId) {
 			if (character.campaignDriveFileId) {
 				try {
-					this.activeCampaign = await driveService.refreshSharedCampaign(character.campaignDriveFileId);
+					this.activeCampaign = await driveService.refreshSharedCampaign(
+						character.campaignDriveFileId
+					);
 				} catch (_) {
 					this.activeCampaign = driveService.getActiveCampaignWorkingCopy();
 				}
 			} else {
 				this.activeCampaign = driveService.getActiveCampaignWorkingCopy();
 			}
-			// Avvia il monitoraggio automatico per sapere se la sessione del Master è attiva
 			p2pService.startSessionMonitor(character.campaignId);
 		} else {
 			this.activeCampaign = null;
@@ -182,21 +202,27 @@ class PlayerAppController {
 			campaignId: null,
 			campaignName: null,
 			campaignDriveFileId: null,
-			name: 'Nuovo Avventuriero',
+			name: i18nService.t('pc.defaultPcName', 'New Adventurer'),
 			level: 1,
 			experience: 0,
-			race: 'Umano',
-			classesRaw: 'Guerriero 1',
-			background: 'Soldato',
-			alignment: 'Neutrale',
+			race: i18nService.t('pc.defaultRace', 'Human'),
+			classesRaw: i18nService.t('pc.defaultClass', 'Fighter 1'),
+			background: i18nService.t('pc.defaultBg', 'Soldier'),
+			alignment: i18nService.t('pc.defaultAlign', 'Neutral'),
 			inspiration: false,
+			ac: 10,
 			hp: {current: 10, max: 10, temp: 0},
 			abilities: {str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10},
+			savingThrowProficiencies: [],
 			skills: '',
 			money: {pp: 0, gp: 10, ep: 0, sp: 0, cp: 0},
+			spellSlots: [],
+			attacks: [],
+			trackers: [],
 			spells: [],
 			items: [],
 			feats: [],
+			companions: [],
 			downtimeLog: [],
 			notes: ''
 		};
@@ -221,7 +247,11 @@ class PlayerAppController {
 			await driveService.saveCharacterToDrive(this.activeCharacter);
 			await this.refreshDriveCharactersList();
 			this.updateSaveStatusIndicator();
-			this.showBanner(`"${this.activeCharacter.name}" salvato su Google Drive!`);
+			this.showBanner(
+				i18nService.t('pc.toastDriveSaved', '"{name}" saved to Google Drive!', {
+					name: this.activeCharacter.name
+				})
+			);
 		} catch (err) {
 			this.showBanner(err.message, true);
 		}
@@ -230,7 +260,9 @@ class PlayerAppController {
 	updateSaveStatusIndicator() {
 		const isDirty = Boolean(this.activeCharacter?._dirty);
 		uiBinder.bindFields(document.body, {
-			saveStatusText: isDirty ? 'Modifiche non salvate su Drive' : 'Salvato su Drive'
+			saveStatusText: isDirty
+			                ? i18nService.t('pc.statusUnsaved', 'Unsaved local changes')
+			                : i18nService.t('pc.statusSaved', 'Saved on Drive')
 		});
 	}
 
@@ -244,10 +276,10 @@ class PlayerAppController {
 		const resolveList = async (list, table) => {
 			if (!Array.isArray(list)) return;
 			for (const entry of list) {
-				if (entry.isCustom && entry.customData?.name) {
+				if (entry.isCustom && (entry.customData?.lookupName || entry.customData?.name)) {
 					const found = await dbService.resolveEntity({
 						                                            table,
-						                                            name: entry.customData.name,
+						                                            name: entry.customData.lookupName || entry.customData.name,
 						                                            source: entry.customData.source
 					                                            });
 					if (found) {
@@ -302,10 +334,14 @@ class PlayerAppController {
 			hydratedShop,
 			(node, item) => {
 				const priceGp = (Number(item.priceCp || 0) / 100).toFixed(2);
+				const stockText = item.unlimited
+				                  ? i18nService.t('common.unlimited', 'Unlimited')
+				                  : i18nService.t('common.available', 'Available: {count}', {count: item.stock});
+
 				uiBinder.bindFields(node, {
-					name: item.name || item.customData?.name || `Oggetto #${item.dbId}`,
-					priceLabel: `${priceGp} mo (${item.priceCp} mr)`,
-					stockLabel: item.unlimited ? 'Illimitato' : `Disponibili: ${item.stock}`,
+					name: item.name || item.customData?.name || `#${item.dbId}`,
+					priceLabel: `${priceGp} gp (${item.priceCp} cp)`,
+					stockLabel: stockText,
 					description: item.description || item.customData?.text || ''
 				});
 
@@ -332,7 +368,7 @@ class PlayerAppController {
 	}
 
 	// =========================================================================
-	// LISTENER P2P LIVE
+	// P2P LIVE LISTENERS
 	// =========================================================================
 
 	setupP2PListeners() {
@@ -354,7 +390,7 @@ class PlayerAppController {
 			this.sessionState.connectionStatus = 'disconnected';
 			this.sessionState.masterRoomAvailable = false;
 			this.updateCampaignAndSessionBar();
-			this.showBanner('Il Master ha chiuso la sessione live.');
+			this.showBanner(i18nService.t('pc.toastSessionClosed', 'The GM closed the live session.'));
 		});
 
 		p2pService.on('CAMPAIGN_RECEIVED', async (freshCampaign) => {
@@ -366,7 +402,9 @@ class PlayerAppController {
 			this.updateCampaignAndSessionBar();
 			await this.renderActiveSheet();
 			await this.renderCampaignShop();
-			this.showBanner('Il Master ha aggiornato le regole e il negozio della campagna!');
+			this.showBanner(
+				i18nService.t('pc.toastGmUpdatedRules', 'The GM updated the campaign rules and shop!')
+			);
 		});
 
 		p2pService.on('GM_OVERRIDE_RECEIVED', async (patch) => {
@@ -374,7 +412,9 @@ class PlayerAppController {
 			Object.assign(this.activeCharacter, patch);
 			await this.markModifiedAndSyncLocal('gm_override');
 			await this.renderActiveSheet();
-			this.showBanner('Il Master ha aggiornato la tua scheda.');
+			this.showBanner(
+				i18nService.t('pc.toastGmUpdatedSheet', 'The GM updated your character sheet.')
+			);
 		});
 
 		p2pService.on('DICE_ROLLED', (rollEntry) => {
@@ -393,7 +433,8 @@ class PlayerAppController {
 		const context = {
 			level,
 			proficiencyBonus: Math.ceil(level / 4) + 1,
-			abilities: this.activeCharacter.abilities
+			abilities: this.activeCharacter.abilities,
+			spellcastingAbility: this.activeCharacter.spellcastingAbility || 'int'
 		};
 
 		const result = diceEngine.roll(notation, context, this.rollAdvantage);
@@ -419,16 +460,20 @@ class PlayerAppController {
 	}
 
 	// =========================================================================
-	// AZIONI GLOBALI DELLA PAGINA
+	// GLOBAL PAGE HANDLERS
 	// =========================================================================
 
 	getGlobalHandlers() {
 		return {
 			loginGoogle: async () => {
 				try {
-					await driveService.signIn();
+					const profile = await driveService.signIn();
 					await this.refreshDriveCharactersList();
-					this.showBanner('Google Drive collegato!');
+					this.showBanner(
+						i18nService.t('hub.toastConnected', 'Connected to Google Drive as {email}!', {
+							email: profile.email
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -444,6 +489,10 @@ class PlayerAppController {
 
 			switchLanguage: async (evt, el) => {
 				await dbService.setLanguage(el.value);
+				uiBinder.updateDbStatusWidget(document.body, dbService.state);
+				this.updateSaveStatusIndicator();
+				this.updateCampaignAndSessionBar();
+				this.renderCharacterSelector();
 				await this.renderActiveSheet();
 				await this.renderCampaignShop();
 			},
@@ -454,7 +503,10 @@ class PlayerAppController {
 
 				if (this.activeCharacter?._dirty) {
 					const confirmSwitch = window.confirm(
-						'Hai modifiche non salvate su Google Drive per il PG attuale. Vuoi cambiare personaggio comunque?'
+						i18nService.t(
+							'pc.confirmSwitchDirty',
+							'You have unsaved changes on Google Drive for the current PC. Switch character anyway?'
+						)
 					);
 					if (!confirmSwitch) {
 						this.renderCharacterSelector();
@@ -465,7 +517,11 @@ class PlayerAppController {
 				try {
 					const loaded = await driveService.loadCharacterFromDrive(selectedDriveId);
 					await this.setActiveCharacter(loaded, false);
-					this.showBanner(`Personaggio "${loaded.name}" caricato!`);
+					this.showBanner(
+						i18nService.t('pc.toastDriveLoaded', 'Character "{name}" loaded from Google Drive!', {
+							name: loaded.name
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -474,7 +530,10 @@ class PlayerAppController {
 			newCharacter: async () => {
 				if (this.activeCharacter?._dirty) {
 					const ok = window.confirm(
-						'Creando un nuovo PG sostituirai quello attuale nella cache locale. Continuare?'
+						i18nService.t(
+							'pc.confirmNewDirty',
+							'Creating a new PC will replace the current working copy in local cache. Continue?'
+						)
 					);
 					if (!ok) return;
 				}
@@ -492,7 +551,13 @@ class PlayerAppController {
 					const xmlText = await file.text();
 					const imported = await fc5eImporter.parseXmlString(xmlText);
 					await this.setActiveCharacter(imported, true);
-					this.showBanner(`"${imported.name}" importato! Clicca su 'Salva PG su Drive' per salvarlo nel cloud.`);
+					this.showBanner(
+						i18nService.t(
+							'pc.toastXmlImported',
+							'"{name}" imported! Click "Save PC to Drive" to store it in the cloud.',
+							{name: imported.name}
+						)
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				} finally {
@@ -502,9 +567,7 @@ class PlayerAppController {
 
 			linkToCampaignPicker: async () => {
 				try {
-					const picked = await driveService.pickSharedJsonFile(
-						'Seleziona il file della Campagna condiviso dal tuo Master'
-					);
+					const picked = await driveService.pickSharedJsonFile();
 					if (!picked || !picked.content?.campaignId) return;
 
 					const manifest = picked.content;
@@ -530,7 +593,11 @@ class PlayerAppController {
 					this.updateCampaignAndSessionBar();
 					await this.renderActiveSheet();
 					await this.renderCampaignShop();
-					this.showBanner(`PG associato alla campagna "${manifest.campaignName}"!`);
+					this.showBanner(
+						i18nService.t('pc.toastCampaignLinked', 'PC linked to campaign "{name}"!', {
+							name: manifest.campaignName
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -539,7 +606,10 @@ class PlayerAppController {
 			unlinkFromCampaign: async () => {
 				if (!this.activeCharacter?.campaignId) return;
 				const ok = window.confirm(
-					'Vuoi scollegare questo personaggio dalla campagna e riportarlo in Modalità Garage libera?'
+					i18nService.t(
+						'pc.confirmUnlink',
+						'Unlink this character from the campaign and return to free Garage Mode?'
+					)
 				);
 				if (!ok) return;
 
@@ -558,7 +628,9 @@ class PlayerAppController {
 				this.updateCampaignAndSessionBar();
 				await this.renderActiveSheet();
 				await this.renderCampaignShop();
-				this.showBanner('Personaggio riportato in Modalità Garage.');
+				this.showBanner(
+					i18nService.t('pc.toastCampaignUnlinked', 'Character returned to Garage Mode.')
+				);
 			},
 
 			checkSessionNow: async () => {
@@ -572,10 +644,7 @@ class PlayerAppController {
 
 			connectP2P: () => {
 				const campId = this.activeCharacter?.campaignId;
-				if (!campId) {
-					this.showBanner('Associa prima il personaggio a una campagna.', true);
-					return;
-				}
+				if (!campId) return;
 				p2pService.connectAsPlayerClient(campId, {
 					playerEmail: driveService.userProfile?.email || null,
 					character: this.activeCharacter
@@ -584,7 +653,7 @@ class PlayerAppController {
 
 			disconnectP2P: () => {
 				p2pService.disconnectPlayerClient(true, this.activeCharacter?.localId);
-				this.showBanner('Disconnesso dalla sessione live.');
+				this.showBanner(i18nService.t('pc.toastDisconnected', 'Disconnected from live session.'));
 			},
 
 			switchTab: (evt, el) => {
@@ -601,13 +670,19 @@ class PlayerAppController {
 
 			quickRollDie: (evt, el) => {
 				const die = el.getAttribute('data-die') || '1d20';
-				this.executeRoll(die, `Lancio ${die}`);
+				this.executeRoll(
+					die,
+					i18nService.t('pc.quickRollLabel', 'Roll {die}', {die})
+				);
 			},
 
 			rollCustomFormula: () => {
 				const input = document.querySelector('[data-field="customDiceFormula"]');
 				if (input && input.value.trim()) {
-					this.executeRoll(input.value.trim(), 'Formula Custom');
+					this.executeRoll(
+						input.value.trim(),
+						i18nService.t('pc.customRollLabel', 'Custom Formula')
+					);
 				}
 			},
 
@@ -631,11 +706,17 @@ class PlayerAppController {
 					uiBinder.bindActions(node, {
 						addCompendiumEntryToCharacter: async () => {
 							if (r.category === 'spells' && !perms.canAddAnySpell) {
-								this.showBanner('Aggiunta libera incantesimi disabilitata dal Master.', true);
+								this.showBanner(
+									i18nService.t('pc.toastSpellLocked', 'Free spell addition is disabled by the GM.'),
+									true
+								);
 								return;
 							}
 							if (r.category === 'items' && !perms.canAddAnyItem) {
-								this.showBanner('Usa il Negozio di Campagna per acquistare oggetti.', true);
+								this.showBanner(
+									i18nService.t('pc.toastItemLocked', 'Use the Campaign Shop to purchase items.'),
+									true
+								);
 								return;
 							}
 							if (r.category === 'spells') {
@@ -652,17 +733,15 @@ class PlayerAppController {
 							}
 							await this.markModifiedAndSyncLocal('compendium_add');
 							await this.renderActiveSheet();
-							this.showBanner(`"${r.name}" aggiunto alla scheda!`);
+							this.showBanner(
+								i18nService.t('pc.toastEntryAdded', '"{name}" added to sheet!', {name: r.name})
+							);
 						}
 					});
 				});
 			}
 		};
 	}
-
-	// =========================================================================
-	// HANDLER DEI CAMPI DELLA SCHEDA (SINCRONIZZATI IN TEMPO REALE VIA P2P)
-	// =========================================================================
 
 	getSheetItemHandlers() {
 		return {
@@ -694,30 +773,45 @@ class PlayerAppController {
 			rollAbilityCheck: (evt, el, ctx) => {
 				if (!ctx) return;
 				const sign = ctx.mod >= 0 ? `+${ctx.mod}` : `${ctx.mod}`;
-				this.executeRoll(`1d20${sign}`, `Prova di ${ctx.label}`);
+				this.executeRoll(
+					`1d20${sign}`,
+					i18nService.t('pc.checkRollLabel', '{label} Check', {label: ctx.label})
+				);
 			},
 
 			rollSavingThrow: (evt, el, ctx) => {
 				if (!ctx) return;
 				const sign = ctx.saveBonus >= 0 ? `+${ctx.saveBonus}` : `${ctx.saveBonus}`;
-				this.executeRoll(`1d20${sign}`, `TS ${ctx.label}`);
+				this.executeRoll(
+					`1d20${sign}`,
+					i18nService.t('pc.saveRollLabel', '{label} Save', {label: ctx.label})
+				);
 			},
 
 			rollSkillCheck: (evt, el, ctx) => {
 				if (!ctx) return;
 				const sign = ctx.bonus >= 0 ? `+${ctx.bonus}` : `${ctx.bonus}`;
-				this.executeRoll(`1d20${sign}`, `Abilità: ${ctx.label}`);
+				this.executeRoll(
+					`1d20${sign}`,
+					i18nService.t('pc.skillRollLabel', 'Skill: {label}', {label: ctx.label})
+				);
 			},
 
 			rollAttackHit: (evt, el, ctx) => {
 				if (!ctx) return;
 				const sign = ctx.hitBonus >= 0 ? `+${ctx.hitBonus}` : `${ctx.hitBonus}`;
-				this.executeRoll(`1d20${sign}`, `Colpire: ${ctx.name}`);
+				this.executeRoll(
+					`1d20${sign}`,
+					i18nService.t('pc.hitRollLabel', 'Hit: {name}', {name: ctx.name})
+				);
 			},
 
 			rollAttackDamage: (evt, el, ctx) => {
 				if (!ctx?.damageFormula) return;
-				this.executeRoll(ctx.damageFormula, `Danni: ${ctx.name}`);
+				this.executeRoll(
+					ctx.damageFormula,
+					i18nService.t('pc.dmgRollLabel', 'Damage: {name}', {name: ctx.name})
+				);
 			},
 
 			rollSpellEffect: (evt, el, ctx) => {

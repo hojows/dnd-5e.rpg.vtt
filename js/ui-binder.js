@@ -1,8 +1,7 @@
 // js/ui-binder.js
-import {CORE_ABILITIES, CORE_SKILLS} from './config.js';
 import {dbService} from './db-service.js';
 import {driveService} from './drive-service.js';
-import {evaluateFormula, getAbilityModifier} from './formula-engine.js';
+import {CORE_ABILITIES, CORE_SKILLS, evaluateFormula, getAbilityModifier} from './formula-engine.js';
 import {i18nService} from './i18n-service.js';
 import {rulesGuard} from './rules-guard.js';
 
@@ -11,13 +10,18 @@ class DomUiBinder {
 		this._userMenuBound = false;
 	}
 
+	/**
+	 * Clones an HTML <template> and immediately translates any [data-i18n] nodes inside it.
+	 */
 	cloneTemplate(templateId) {
 		const tpl = document.getElementById(templateId);
 		if (!tpl || !(tpl instanceof HTMLTemplateElement)) {
 			throw new Error(`HTML Template not found: #${templateId}`);
 		}
 		const firstChild = tpl.content.firstElementChild;
-		return firstChild ? firstChild.cloneNode(true) : tpl.content.cloneNode(true);
+		const node = firstChild ? firstChild.cloneNode(true) : tpl.content.cloneNode(true);
+		i18nService.translateDom(node);
+		return node;
 	}
 
 	resolvePath(obj, path) {
@@ -278,7 +282,11 @@ class DomUiBinder {
 			.join(' + ');
 
 		const advLabel =
-			      rollEntry.advantage > 0 ? 'VANTAGGIO' : rollEntry.advantage < 0 ? 'SVANTAGGIO' : '';
+			      rollEntry.advantage > 0
+			      ? i18nService.t('common.advantage', 'ADVANTAGE')
+			      : rollEntry.advantage < 0
+			        ? i18nService.t('common.disadvantage', 'DISADVANTAGE')
+			        : '';
 
 		this.bindFields(node, {
 			rollerName: rollEntry.rollerName || 'Player',
@@ -287,7 +295,7 @@ class DomUiBinder {
 			rollsBreakdown: rollsBreakdown || rollEntry.expression,
 			total: rollEntry.total,
 			advantageBadge: advLabel,
-			time: new Date(rollEntry.timestamp || Date.now()).toLocaleTimeString('it-IT', {
+			time: new Date(rollEntry.timestamp || Date.now()).toLocaleTimeString([], {
 				hour: '2-digit',
 				minute: '2-digit',
 				second: '2-digit'
@@ -310,7 +318,6 @@ class DomUiBinder {
 		await driveService.loadActiveImagesMap();
 		const portraitUrl = driveService.getImageDataUrl(character.imageUid);
 
-		const lang = dbService.activeLang || 'eng';
 		const perms = rulesGuard.getPermissions(character, campaignManifest);
 		const level = Number(character.level) || 1;
 		const proficiencyBonus = Math.ceil(level / 4) + 1;
@@ -330,8 +337,15 @@ class DomUiBinder {
 			                 .join(' • ')
 			      : `${level}d8`;
 
+		const badgeText = perms.isCampaignBound
+		                  ? i18nService.t('pc.campaignBoundBadge', 'Campaign: {name} (Max Lv. {max})', {
+				name: campaignManifest?.campaignName || '',
+				max: perms.maxAllowedLevel
+			})
+		                  : i18nService.t('pc.garageModeBadge', 'Garage Mode (Free Edit)');
+
 		this.bindFields(rootEl, {
-			name: character.name || 'Unnamed',
+			name: character.name || '',
 			portraitUrl: portraitUrl || '',
 			level,
 			proficiencyBonus: `+${proficiencyBonus}`,
@@ -357,9 +371,7 @@ class DomUiBinder {
 			},
 			notes: character.notes || '',
 			companionsCount: Array.isArray(character.companions) ? character.companions.length : 0,
-			campaignBadgeText: perms.isCampaignBound
-			                   ? `Campagna: ${campaignManifest?.campaignName || 'Associata'} (Max Liv. ${perms.maxAllowedLevel})`
-			                   : 'Modalità Garage (Modifica Libera)'
+			campaignBadgeText: badgeText
 		});
 
 		this.bindVisibility(rootEl, {
@@ -369,8 +381,10 @@ class DomUiBinder {
 		this.bindEnabled(rootEl, perms);
 		this.bindActions(rootEl, actionHandlers);
 
+		// 1. Abilities Grid (labels from i18n)
 		const abilitiesContainer = rootEl.querySelector('[data-list="abilities"]');
 		const saveProfs = new Set(character.savingThrowProficiencies || []);
+		const savePrefix = i18nService.t('common.savePrefix', 'ST');
 
 		this.renderList(abilitiesContainer, 'tpl-ability-card', CORE_ABILITIES, (node, ab) => {
 			const score = Number(character.abilities?.[ab.key] ?? 10);
@@ -379,24 +393,27 @@ class DomUiBinder {
 			const hasSaveProf = saveProfs.has(ab.key);
 			const saveBonus = mod + (hasSaveProf ? proficiencyBonus : 0);
 			const saveFormatted = saveBonus >= 0 ? `+${saveBonus}` : `${saveBonus}`;
+			const fullLabel = i18nService.t(`abilities.${ab.key}.full`, ab.key.toUpperCase());
+			const shortLabel = i18nService.t(`abilities.${ab.key}.short`, ab.key.toUpperCase());
 
 			this.bindFields(node, {
-				abilityKey: ab.key.toUpperCase(),
-				abilityLabel: lang === 'ita' ? ab.full_ita : ab.full_eng,
+				abilityKey: shortLabel,
+				abilityLabel: fullLabel,
 				score,
 				modifier: modFormatted,
-				saveBonus: `TS ${saveFormatted}`
+				saveBonus: `${savePrefix} ${saveFormatted}`
 			});
 
 			this.bindEnabled(node, perms);
 			this.bindActions(node, actionHandlers, {
 				abilityKey: ab.key,
-				label: lang === 'ita' ? ab.full_ita : ab.full_eng,
+				label: fullLabel,
 				mod,
 				saveBonus
 			});
 		});
 
+		// 2. Attacks & Trackers
 		const attacksContainer = rootEl.querySelector('[data-list="attacks"]');
 		if (attacksContainer && document.getElementById('tpl-attack-row')) {
 			this.renderList(
@@ -411,12 +428,14 @@ class DomUiBinder {
 					} catch (_) {}
 					const hitFormatted = hitNum >= 0 ? `+${hitNum}` : `${hitNum}`;
 					const dmgEval = evaluateFormula(atk.damageFormula, charContext);
+					const dmgTypeLabel = atk.damageTypeCode
+					                     ? i18nService.t(`damageTypes.${atk.damageTypeCode}`, '')
+					                     : atk.damageType || '';
 
 					this.bindFields(node, {
 						name: atk.name,
-						type: atk.type || 'Melee',
 						hitBonus: hitFormatted,
-						damageText: `${dmgEval.expression} ${atk.damageType || ''}`.trim()
+						damageText: `${dmgEval.expression} ${dmgTypeLabel}`.trim()
 					});
 
 					this.bindActions(node, actionHandlers, {
@@ -436,10 +455,15 @@ class DomUiBinder {
 				'tpl-tracker-card',
 				character.trackers || [],
 				(node, tr, idx) => {
+					const resetLabel =
+						      tr.resetType === 1
+						      ? i18nService.t('common.shortRest', 'Short Rest')
+						      : i18nService.t('common.longRest', 'Long Rest');
+
 					this.bindFields(node, {
 						label: tr.label,
 						origin: tr.origin || '',
-						resetLabel: tr.resetLabel || 'Long Rest',
+						resetLabel,
 						current: tr.current ?? 0,
 						max: tr.max ?? 0
 					});
@@ -449,36 +473,48 @@ class DomUiBinder {
 			);
 		}
 
+		// 3. Skills (labels from i18n)
 		const skillsContainer = rootEl.querySelector('[data-list="skills"]');
 		const profSkillsStr = (character.skills || '').toLowerCase();
 
 		this.renderList(skillsContainer, 'tpl-skill-row', CORE_SKILLS, (node, sk) => {
+			const localizedSkill = i18nService.t(`skills.${sk.key}`, sk.engKey);
+			const localizedAbShort = i18nService.t(`abilities.${sk.ability}.short`, sk.ability.toUpperCase());
 			const isProficient =
 				profSkillsStr.includes(sk.key.toLowerCase()) ||
-				profSkillsStr.includes(sk.label_ita.toLowerCase());
+				profSkillsStr.includes(sk.engKey.toLowerCase()) ||
+				profSkillsStr.includes(localizedSkill.toLowerCase());
+
 			const baseMod = getAbilityModifier(character.abilities?.[sk.ability] ?? 10);
 			const totalBonus = baseMod + (isProficient ? proficiencyBonus : 0);
 			const bonusFormatted = totalBonus >= 0 ? `+${totalBonus}` : `${totalBonus}`;
 
 			this.bindFields(node, {
-				skillName: lang === 'ita' ? sk.label_ita : sk.label_eng,
-				abilityTag: sk.ability.toUpperCase(),
+				skillName: localizedSkill,
+				abilityTag: localizedAbShort,
 				bonus: bonusFormatted,
 				proficientMarker: isProficient ? '●' : '○'
 			});
 
 			this.bindActions(node, actionHandlers, {
 				skillKey: sk.key,
-				label: lang === 'ita' ? sk.label_ita : sk.label_eng,
+				label: localizedSkill,
 				bonus: totalBonus
 			});
 		});
+
+		// 4. Spell Slots & Spells
+		const lvShort = i18nService.t('common.levelShort', 'Lv.');
+		const cantripLabel = i18nService.t('common.cantrip', 'Cantrip');
 
 		const slotsContainer = rootEl.querySelector('[data-list="spell-slots"]');
 		if (slotsContainer && document.getElementById('tpl-spell-slot-badge')) {
 			this.renderList(slotsContainer, 'tpl-spell-slot-badge', character.spellSlots || [], (node, sl, idx) => {
 				this.bindFields(node, {
-					slotTitle: `${sl.type === 'Standard' ? `Lv. ${sl.level}` : `Lv. ${sl.level} (${sl.type})`}`,
+					slotTitle:
+						sl.type === 'Standard'
+						? `${lvShort} ${sl.level}`
+						: `${lvShort} ${sl.level} (${sl.type})`,
 					current: sl.current ?? sl.max,
 					max: sl.max
 				});
@@ -496,7 +532,7 @@ class DomUiBinder {
 			'tpl-spell-row',
 			hydratedSpells,
 			(node, sp, idx) => {
-				const displayName = sp.customLabel || sp.name || sp.customData?.name || `Spell #${sp.dbId}`;
+				const displayName = sp.name || sp.customLabel || sp.customData?.name || `#${sp.dbId}`;
 				const spellLevel = sp.level ?? sp.customData?.level ?? 0;
 				const school = sp.school || sp.customData?.school || '';
 				const description = sp.description || sp.customData?.text || '';
@@ -504,7 +540,7 @@ class DomUiBinder {
 
 				this.bindFields(node, {
 					name: displayName,
-					levelLabel: spellLevel === 0 ? 'Cantrip' : `Lv. ${spellLevel}`,
+					levelLabel: spellLevel === 0 ? cantripLabel : `${lvShort} ${spellLevel}`,
 					originBadge: sp.origin || sp.customData?.origin || '',
 					school,
 					castingTime: sp.casting_time || sp.customData?.casting_time || '-',
@@ -513,7 +549,7 @@ class DomUiBinder {
 					description,
 					prepared: Boolean(sp.prepared),
 					rollFormula: firstRoll,
-					sourceBadge: sp.isCustom ? 'XML/CUSTOM' : sp.source || 'PHB'
+					sourceBadge: sp.isCustom ? 'CUSTOM' : sp.source || 'PHB'
 				});
 
 				this.bindVisibility(node, {
@@ -530,6 +566,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="spells"]')
 		);
 
+		// 5. Items
 		const itemsContainer = rootEl.querySelector('[data-list="items"]');
 		const hydratedItems = await Promise.all(
 			(character.items || []).map((it) => dbService.hydrateEntry('items', it, customRegistry))
@@ -540,21 +577,21 @@ class DomUiBinder {
 			'tpl-item-row',
 			hydratedItems,
 			(node, it, idx) => {
-				const displayName = it.customLabel || it.name || it.customData?.name || `Item #${it.dbId}`;
+				const displayName = it.name || it.customLabel || it.customData?.name || `#${it.dbId}`;
 				const description = it.description || it.customData?.text || '';
 				const itemImgUrl = driveService.getImageDataUrl(it.imageUid || it.customData?.imageUid);
 
 				this.bindFields(node, {
 					name: displayName,
 					itemImgUrl: itemImgUrl || '',
-					containerBadge: it.container || it.customData?.container || 'Backpack',
+					containerBadge: it.container || it.customData?.container || '',
 					count: it.count ?? 1,
 					equipped: Boolean(it.equipped),
-					rarity: it.rarity || it.customData?.detail || 'Common',
+					rarity: it.rarity || it.customData?.detail || '',
 					damage: it.damage || it.customData?.damage || '',
 					ac: (it.ac || it.customData?.ac) > 0 ? `AC +${it.ac || it.customData?.ac}` : '',
 					description,
-					sourceBadge: it.isCustom ? 'XML/CUSTOM' : it.source || 'PHB'
+					sourceBadge: it.isCustom ? 'CUSTOM' : it.source || 'PHB'
 				});
 
 				this.bindVisibility(node, {
@@ -566,6 +603,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="items"]')
 		);
 
+		// 6. Feats & Features
 		const featsContainer = rootEl.querySelector('[data-list="feats"]');
 		const hydratedFeats = await Promise.all(
 			(character.feats || []).map((ft) => dbService.hydrateEntry('feats', ft, customRegistry))
@@ -576,7 +614,7 @@ class DomUiBinder {
 			'tpl-feat-row',
 			hydratedFeats,
 			(node, ft, idx) => {
-				const displayName = ft.customLabel || ft.name || ft.customData?.name || `Feat #${ft.dbId}`;
+				const displayName = ft.name || ft.customLabel || ft.customData?.name || `#${ft.dbId}`;
 				const description = ft.description || ft.customData?.text || '';
 
 				this.bindFields(node, {
@@ -584,7 +622,7 @@ class DomUiBinder {
 					originBadge: ft.origin || ft.customData?.origin || '',
 					prerequisite: ft.prerequisite || ft.customData?.prerequisite || '',
 					description,
-					sourceBadge: ft.isCustom ? 'XML/CUSTOM' : ft.source || 'PHB'
+					sourceBadge: ft.isCustom ? 'CUSTOM' : ft.source || 'PHB'
 				});
 
 				this.bindActions(node, actionHandlers, {index: idx, entry: ft, name: displayName});
@@ -592,6 +630,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="feats"]')
 		);
 
+		// 7. Companions (<monster>, e.g., A.R.G.O.)
 		const companionsContainer = rootEl.querySelector('[data-list="companions"]');
 		if (companionsContainer && document.getElementById('tpl-companion-card')) {
 			this.renderList(
@@ -603,8 +642,26 @@ class DomUiBinder {
 					const abStr = CORE_ABILITIES.map((a) => {
 						const sc = comp.abilities?.[a.key] ?? 10;
 						const m = getAbilityModifier(sc);
-						return `${lang === 'ita' ? a.label_ita : a.label_eng}: ${sc} (${m >= 0 ? `+${m}` : m})`;
+						const abShort = i18nService.t(`abilities.${a.key}.short`, a.key.toUpperCase());
+						return `${abShort}: ${sc} (${m >= 0 ? `+${m}` : m})`;
 					}).join(' | ');
+
+					const savesList = (comp.savingThrows || []).map((st) => {
+						if (typeof st === 'string') return st;
+						const abShort = i18nService.t(`abilities.${st.abilityKey}.short`, st.abilityKey.toUpperCase());
+						return `${abShort} ${st.modifier >= 0 ? `+${st.modifier}` : st.modifier}`;
+					});
+
+					const skillsList = (comp.skills || []).map((sk) => {
+						if (typeof sk === 'string') return sk;
+						const skLabel = i18nService.t(`skills.${sk.skillKey}`, sk.skillKey);
+						return `${skLabel} ${sk.modifier >= 0 ? `+${sk.modifier}` : sk.modifier}`;
+					});
+
+					const sizeLabel =
+						      comp.sizeCode !== undefined
+						      ? i18nService.t(`monsterSizes.${comp.sizeCode}`, '')
+						      : comp.size || '';
 
 					const traitsText = (comp.traits || []).map((t) => `• ${t.name}: ${t.text}`).join('\n');
 					const actionsText = (comp.actions || [])
@@ -621,13 +678,13 @@ class DomUiBinder {
 						label: comp.label || comp.name,
 						name: comp.name,
 						companionImgUrl: compImgUrl || '',
-						typeAndSize: `${comp.size || ''} ${comp.type || ''} (${comp.alignment || ''})`.trim(),
+						typeAndSize: `${sizeLabel} ${comp.type || ''} (${comp.alignment || ''})`.trim(),
 						ac: comp.ac || '10',
 						speed: comp.speed || '-',
 						hpCurrent: comp.hp?.current ?? 10,
 						hpMax: comp.hp?.max ?? 10,
 						abilitiesLine: abStr,
-						skillsAndSaves: [...(comp.savingThrows || []), ...(comp.skills || [])].join(' • ') || '-',
+						skillsAndSaves: [...savesList, ...skillsList].join(' • ') || '-',
 						immunities: [comp.immune, comp.conditionImmune].filter(Boolean).join(' | ') || '-',
 						senses: `${comp.senses || ''} (PP ${comp.passivePerception ?? 10})`.trim(),
 						text: comp.text || '',

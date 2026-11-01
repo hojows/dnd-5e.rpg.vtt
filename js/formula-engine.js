@@ -1,5 +1,35 @@
 // js/formula-engine.js
 
+export const CORE_ABILITIES = [
+	{key: 'str', index: 0},
+	{key: 'dex', index: 1},
+	{key: 'con', index: 2},
+	{key: 'int', index: 3},
+	{key: 'wis', index: 4},
+	{key: 'cha', index: 5}
+];
+
+export const CORE_SKILLS = [
+	{code: 100, monsterId: 0, key: 'acrobatics', engKey: 'Acrobatics', ability: 'dex'},
+	{code: 101, monsterId: 1, key: 'animal_handling', engKey: 'Animal Handling', ability: 'wis'},
+	{code: 102, monsterId: 2, key: 'arcana', engKey: 'Arcana', ability: 'int'},
+	{code: 103, monsterId: 3, key: 'athletics', engKey: 'Athletics', ability: 'str'},
+	{code: 104, monsterId: 4, key: 'deception', engKey: 'Deception', ability: 'cha'},
+	{code: 105, monsterId: 5, key: 'history', engKey: 'History', ability: 'int'},
+	{code: 106, monsterId: 6, key: 'insight', engKey: 'Insight', ability: 'wis'},
+	{code: 107, monsterId: 7, key: 'intimidation', engKey: 'Intimidation', ability: 'cha'},
+	{code: 108, monsterId: 8, key: 'investigation', engKey: 'Investigation', ability: 'int'},
+	{code: 109, monsterId: 9, key: 'medicine', engKey: 'Medicine', ability: 'wis'},
+	{code: 110, monsterId: 10, key: 'nature', engKey: 'Nature', ability: 'int'},
+	{code: 111, monsterId: 11, key: 'perception', engKey: 'Perception', ability: 'wis'},
+	{code: 112, monsterId: 12, key: 'performance', engKey: 'Performance', ability: 'cha'},
+	{code: 113, monsterId: 13, key: 'persuasion', engKey: 'Persuasion', ability: 'cha'},
+	{code: 114, monsterId: 14, key: 'religion', engKey: 'Religion', ability: 'int'},
+	{code: 115, monsterId: 15, key: 'sleight_of_hand', engKey: 'Sleight of Hand', ability: 'dex'},
+	{code: 116, monsterId: 16, key: 'stealth', engKey: 'Stealth', ability: 'dex'},
+	{code: 117, monsterId: 17, key: 'survival', engKey: 'Survival', ability: 'wis'}
+];
+
 export function getAbilityModifier(score) {
 	const val = Number(score) || 10;
 	return Math.floor((val - 10) / 2);

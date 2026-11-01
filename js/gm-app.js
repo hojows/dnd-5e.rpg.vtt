@@ -2,6 +2,7 @@
 import {dbService} from './db-service.js';
 import {diceEngine} from './dice-engine.js';
 import {driveService} from './drive-service.js';
+import {i18nService} from './i18n-service.js';
 import {p2pService} from './p2p-service.js';
 import {rulesGuard} from './rules-guard.js';
 import {uiBinder} from './ui-binder.js';
@@ -10,9 +11,9 @@ class MasterAppController {
 	constructor() {
 		this.driveCampaignFiles = [];
 		this.activeCampaign = null;
-		this.partyCharacters = new Map(); // localId -> { character, peerId, online, audit }
+		this.partyCharacters = new Map();
 		this.inspectedCharacterId = null;
-		this.hostStatus = 'disconnected'; // "disconnected" | "connecting" | "hosting"
+		this.hostStatus = 'disconnected';
 		this.connectedPeersCount = 0;
 	}
 
@@ -23,7 +24,8 @@ class MasterAppController {
 				this.renderShopCatalogBuilder();
 			}
 		});
-		dbService.init();
+
+		await dbService.init();
 
 		driveService.onAuthChange(async (authState) => {
 			uiBinder.updateAuthWidget(document.body, authState);
@@ -55,11 +57,15 @@ class MasterAppController {
 		const isHosting = this.hostStatus === 'hosting';
 		const isConnecting = this.hostStatus === 'connecting';
 
-		let statusText = 'Sessione Live: Chiusa (Offline)';
+		let statusText = i18nService.t('gm.sessionClosed', 'Live Session: Closed (Offline)');
 		if (isHosting) {
-			statusText = `Sessione Live: ATTIVA (${this.connectedPeersCount} PG connessi)`;
+			statusText = i18nService.t(
+				'gm.sessionActive',
+				'Live Session: ACTIVE ({count} PCs connected)',
+				{count: this.connectedPeersCount}
+			);
 		} else if (isConnecting) {
-			statusText = 'Apertura Stanza P2P in corso...';
+			statusText = i18nService.t('gm.sessionConnecting', 'Opening P2P Room...');
 		}
 
 		uiBinder.bindFields(barEl, {
@@ -81,7 +87,8 @@ class MasterAppController {
 			const isInitialBlank =
 				this.activeCampaign &&
 				!this.activeCampaign.driveFileId &&
-				this.activeCampaign.campaignName === 'Nuova Campagna';
+				(this.activeCampaign.campaignName === 'New Campaign' ||
+				 this.activeCampaign.campaignName === 'Nuova Campagna');
 
 			if (isInitialBlank && this.driveCampaignFiles.length > 0) {
 				const loaded = await driveService.loadCampaignFromDrive(this.driveCampaignFiles[0].id);
@@ -97,10 +104,14 @@ class MasterAppController {
 		if (!selectEl) return;
 		selectEl.replaceChildren();
 
+		const lvShort = i18nService.t('common.levelShort', 'Lv.');
+
 		if (this.activeCampaign) {
 			const opt = document.createElement('option');
 			opt.value = this.activeCampaign.driveFileId || '__LOCAL_CAMP__';
-			opt.textContent = `${this.activeCampaign.campaignName} (Max Liv. ${this.activeCampaign.rules?.maxLevel || 1})`;
+			opt.textContent = `${this.activeCampaign.campaignName} (Max ${lvShort} ${
+				                                                                       this.activeCampaign.rules?.maxLevel || 1
+			})`;
 			opt.selected = true;
 			selectEl.appendChild(opt);
 		}
@@ -109,7 +120,10 @@ class MasterAppController {
 			if (this.activeCampaign && f.id === this.activeCampaign.driveFileId) return;
 			const opt = document.createElement('option');
 			opt.value = f.id;
-			opt.textContent = `☁️ ${f.name.replace(/^CAMP_/, '').replace(/_camp_.*\.json$/, '').replace(/_/g, ' ')}`;
+			opt.textContent = `☁️ ${f.name
+			                         .replace(/^CAMP_/, '')
+			                         .replace(/_camp_.*\.json$/, '')
+			                         .replace(/_/g, ' ')}`;
 			selectEl.appendChild(opt);
 		});
 	}
@@ -130,7 +144,8 @@ class MasterAppController {
 
 	async createNewCampaign() {
 		const masterEmail = driveService.userProfile?.email || '';
-		const manifest = rulesGuard.createDefaultCampaignManifest('Nuova Campagna', masterEmail);
+		const defaultName = i18nService.t('gm.defaultCampaignName', 'New Campaign');
+		const manifest = rulesGuard.createDefaultCampaignManifest(defaultName, masterEmail);
 		manifest.isMasterCopy = true;
 		await this.setActiveCampaign(manifest);
 	}
@@ -157,9 +172,19 @@ class MasterAppController {
 			this.activeCampaign.masterEmail = driveService.userProfile?.email || '';
 			await driveService.saveCampaignToDrive(this.activeCampaign);
 			await this.refreshDriveCampaignsList();
-			this.showBanner('Campagna salvata su Google Drive e inviata in push al Party!');
+			this.showBanner(
+				i18nService.t(
+					'gm.toastCampaignSaved',
+					'Campaign saved to Google Drive and pushed to the Party!'
+				)
+			);
 		} else {
-			this.showBanner('Regole aggiornate e inviate via P2P (Collegati a Drive per salvarle in cloud).');
+			this.showBanner(
+				i18nService.t(
+					'gm.toastCampaignLocal',
+					'Rules updated and pushed via P2P (Sign in to Drive for cloud backup).'
+				)
+			);
 		}
 	}
 
@@ -183,9 +208,9 @@ class MasterAppController {
 			(node, item, idx) => {
 				const priceGp = (Number(item.priceCp || 0) / 100).toFixed(2);
 				uiBinder.bindFields(node, {
-					name: item.name || item.customData?.name || `Item #${item.dbId}`,
+					name: item.name || item.customData?.name || `#${item.dbId}`,
 					priceCp: item.priceCp || 0,
-					priceGpLabel: `${priceGp} mo`,
+					priceGpLabel: `${priceGp} gp`,
 					stock: item.stock ?? 1,
 					unlimited: Boolean(item.unlimited)
 				});
@@ -219,8 +244,8 @@ class MasterAppController {
 			const defaultCp = Number(dbItem.value_cp) || 500;
 			uiBinder.bindFields(node, {
 				name: dbItem.name,
-				rarity: dbItem.rarity || 'Comune',
-				defaultPriceGp: `${(defaultCp / 100).toFixed(2)} mo`
+				rarity: dbItem.rarity || '',
+				defaultPriceGp: `${(defaultCp / 100).toFixed(2)} gp`
 			});
 
 			uiBinder.bindActions(node, {
@@ -240,10 +265,6 @@ class MasterAppController {
 			});
 		});
 	}
-
-	// =========================================================================
-	// SINCRONIZZAZIONE PARTY LIVE E AGGIORNAMENTO MODALE ISPEZIONE
-	// =========================================================================
 
 	setupP2PListeners() {
 		p2pService.on('STATUS_CHANGE', (st) => {
@@ -330,10 +351,14 @@ class MasterAppController {
 					level: ch.level,
 					race: ch.race,
 					classesRaw: ch.classesRaw,
-					hpSummary: `${ch.hp?.current ?? 0} / ${ch.hp?.max ?? 0} PF`,
-					wealthSummary: `${wealthGp} mo`,
-					connectionBadge: entry.online ? '🟢 Online Live' : '⚪ Offline',
-					auditStatusText: audit.valid ? 'Conforme alle regole' : audit.warnings.join(' | ')
+					hpSummary: `${ch.hp?.current ?? 0} / ${ch.hp?.max ?? 0} HP`,
+					wealthSummary: `${wealthGp} gp`,
+					connectionBadge: entry.online
+					                 ? i18nService.t('gm.onlineBadge', '🟢 Online Live')
+					                 : i18nService.t('gm.offlineBadge', '⚪ Offline'),
+					auditStatusText: audit.valid
+					                 ? i18nService.t('gm.auditValid', 'Compliant with campaign rules')
+					                 : audit.warnings.join(' | ')
 				});
 
 				uiBinder.bindVisibility(node, {
@@ -377,9 +402,13 @@ class MasterAppController {
 		return {
 			loginGoogle: async () => {
 				try {
-					await driveService.signIn();
+					const profile = await driveService.signIn();
 					await this.refreshDriveCampaignsList();
-					this.showBanner('Google Drive collegato!');
+					this.showBanner(
+						i18nService.t('hub.toastConnected', 'Connected to Google Drive as {email}!', {
+							email: profile.email
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -389,6 +418,10 @@ class MasterAppController {
 
 			switchLanguage: async (evt, el) => {
 				await dbService.setLanguage(el.value);
+				uiBinder.updateDbStatusWidget(document.body, dbService.state);
+				this.updateMasterSessionBar();
+				this.renderCampaignSelector();
+				this.renderPartyDashboard();
 				await this.renderShopManager();
 				await this.renderShopCatalogBuilder();
 			},
@@ -399,7 +432,11 @@ class MasterAppController {
 				try {
 					const loaded = await driveService.loadCampaignFromDrive(driveId);
 					await this.setActiveCampaign(loaded);
-					this.showBanner(`Campagna "${loaded.campaignName}" caricata da Drive!`);
+					this.showBanner(
+						i18nService.t('gm.toastCampaignLoaded', 'Campaign "{name}" loaded from Drive!', {
+							name: loaded.campaignName
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -437,7 +474,13 @@ class MasterAppController {
 					}
 					await driveService.shareFileReadOnly(this.activeCampaign.driveFileId, email);
 					input.value = '';
-					this.showBanner(`Campagna condivisa in sola lettura su Drive con ${email}!`);
+					this.showBanner(
+						i18nService.t(
+							'gm.toastCampaignShared',
+							'Campaign shared read-only on Drive with {email}!',
+							{email}
+						)
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -445,9 +488,7 @@ class MasterAppController {
 
 			inspectSharedCharacterFromDrive: async () => {
 				try {
-					const picked = await driveService.pickSharedJsonFile(
-						'Seleziona la scheda PG condivisa da un giocatore'
-					);
+					const picked = await driveService.pickSharedJsonFile();
 					if (!picked || !picked.content?.localId) return;
 					const ch = picked.content;
 					const audit = rulesGuard.auditCharacter(ch, this.activeCampaign);
@@ -458,7 +499,11 @@ class MasterAppController {
 						audit
 					});
 					this.renderPartyDashboard();
-					this.showBanner(`Scheda di "${ch.name}" caricata da Google Drive!`);
+					this.showBanner(
+						i18nService.t('gm.toastPcLoaded', 'Sheet for "{name}" loaded from Google Drive!', {
+							name: ch.name
+						})
+					);
 				} catch (err) {
 					this.showBanner(err.message, true);
 				}
@@ -467,7 +512,12 @@ class MasterAppController {
 			startP2PHost: () => {
 				if (!this.activeCampaign) return;
 				p2pService.startAsMasterHost(this.activeCampaign.campaignId);
-				this.showBanner('Sessione Live avviata! I giocatori della campagna ora vedono la stanza attiva.');
+				this.showBanner(
+					i18nService.t(
+						'gm.toastSessionStarted',
+						'Live Session started! Campaign players can now join.'
+					)
+				);
 			},
 
 			stopP2PHost: () => {
@@ -477,7 +527,7 @@ class MasterAppController {
 					entry.peerId = null;
 				}
 				this.renderPartyDashboard();
-				this.showBanner('Sessione Live chiusa.');
+				this.showBanner(i18nService.t('gm.toastSessionStopped', 'Live Session closed.'));
 			},
 
 			pushCampaignUpdate: async () => {

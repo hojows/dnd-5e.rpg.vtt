@@ -1,173 +1,188 @@
 <!DOCTYPE html>
-<html class="dark" lang="it">
+<html class="dark" lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
-		<title>GM Screen — Regia Campagna D&amp;D 5e VTT</title>
+		<title data-i18n="gm.pageTitle"></title>
 		<script src="https://cdn.tailwindcss.com"></script>
 		<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 	</head>
 	<body class="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-indigo-500 selection:text-white">
 
-		<!-- Banner Notifiche Toast -->
+		<!-- Toast Notification Banner -->
 		<div class="hidden fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 px-4 py-3 rounded-xl border border-indigo-500/40 bg-zinc-900/95 text-indigo-300 shadow-2xl text-sm font-medium" data-role="notification-banner"></div>
 
 		<!-- Top Navbar Master -->
 		<header class="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur sticky top-0 z-30">
 			<div class="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+				<!-- Left: Hub + Campaign Selector + New Campaign -->
 				<div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-					<a class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-300" href="./index.html">
-						&larr; Hub
-					</a>
-					<select class="flex-1 sm:flex-initial bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm font-semibold text-indigo-400" data-action="changeActiveCampaign" data-role="campaign-selector"></select>
-					<button class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200" data-action="newCampaign" type="button">
-						+ Nuova Campagna
-					</button>
+					<a class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-300" data-i18n="common.hubBtn" href="./index.html"></a>
+					<select
+						class="flex-1 sm:flex-initial bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm font-semibold text-indigo-400 focus:outline-none focus:border-indigo-500"
+						data-action="changeActiveCampaign"
+						data-role="campaign-selector"></select>
+					<button class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200" data-action="newCampaign" data-i18n="gm.newCampaignBtn" type="button"></button>
 				</div>
 
-				<div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-					<div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-lg text-xs" data-role="db-status-widget">
+				<!-- Right: DB Status + Language Selector + User Avatar Dropdown -->
+				<div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+					<div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 rounded-lg text-xs" data-role="db-status-widget">
 						<span class="w-2 h-2 rounded-full bg-emerald-400 hidden" data-show-if="isDbReady"></span>
-						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
-						<span class="text-zinc-400" data-field="dbStatusText">DB...</span>
+						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse hidden" data-show-if="isDownloadingDb"></span>
+						<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
+						<span class="text-zinc-300 font-medium truncate max-w-[140px] sm:max-w-none" data-field="dbStatusText"></span>
+						<div class="w-12 h-1.5 bg-zinc-800 rounded-full overflow-hidden hidden" data-show-if="isDownloadingDb">
+							<div class="h-full bg-amber-400 transition-all duration-200" data-role="db-progress-bar" style="width: 0%"></div>
+						</div>
 					</div>
 
-					<select class="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300" data-action="switchLanguage">
-						<option value="eng">🇬🇧 ENG</option>
-						<option value="ita">🇮🇹 ITA</option>
+					<select
+						aria-label="Language"
+						class="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-200 cursor-pointer focus:outline-none focus:border-indigo-500"
+						data-action="switchLanguage">
+						<option value="eng">🇬🇧</option>
+						<option value="ita">🇮🇹</option>
 					</select>
 
-					<!-- Bottone Login visibile subito di default -->
-					<button class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow" data-action="loginGoogle" data-role="auth-logged-out" type="button">
-						Login Google Drive
-					</button>
-
-					<!-- Utente connesso + Esci -->
-					<div class="hidden flex items-center gap-2" data-role="auth-logged-in">
-						<span class="hidden lg:inline text-xs text-emerald-400 font-medium" data-field="userEmail"></span>
-						<button class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" type="button">
-							Esci
+					<!-- User Avatar / Generic Silhouette with Dropdown -->
+					<div class="relative" data-role="user-menu-container">
+						<button aria-label="Account" class="relative flex items-center justify-center w-9 h-9 rounded-full bg-zinc-950 border border-zinc-700 hover:border-indigo-500/60 focus:outline-none transition" data-action="toggleUserMenu" type="button">
+							<img alt="" class="hidden w-full h-full rounded-full object-cover" data-role="user-avatar-img" referrerpolicy="no-referrer" />
+							<span class="flex items-center justify-center text-zinc-400" data-role="user-avatar-fallback">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+							<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-500 ring-2 ring-zinc-900" data-role="user-status-dot"></span>
 						</button>
+
+						<div class="hidden absolute right-0 mt-2 w-64 rounded-2xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-md shadow-2xl p-3.5 z-50" data-role="user-menu-dropdown">
+							<div class="space-y-3" data-role="auth-logged-out">
+								<div>
+									<div class="text-xs font-bold text-zinc-200" data-i18n="common.guestTitle"></div>
+									<p class="text-[11px] text-zinc-400 mt-0.5 leading-relaxed" data-i18n="common.notConnectedDesc"></p>
+								</div>
+								<button class="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow transition" data-action="loginGoogle" data-i18n="common.loginGoogle" type="button"></button>
+							</div>
+
+							<div class="hidden space-y-3" data-role="auth-logged-in">
+								<div class="border-b border-zinc-800 pb-2.5">
+									<div class="text-xs font-bold text-white truncate" data-field="userName"></div>
+									<div class="text-[11px] text-emerald-400 truncate" data-field="userEmail"></div>
+									<div class="text-[10px] text-zinc-500 mt-1">
+										<span data-i18n="common.vaultFolder"></span> <code>DND5E_Vault</code>
+									</div>
+								</div>
+								<button
+									class="w-full py-1.5 px-3 rounded-xl bg-zinc-800 hover:bg-rose-950/60 hover:text-rose-300 border border-zinc-700/80 text-xs font-semibold text-zinc-200 transition"
+									data-action="logoutGoogle"
+									data-i18n="common.logout"
+									type="button"></button>
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>
 
+			<!-- Second Bar: Live Session Control & Cloud Push -->
 			<div class="bg-zinc-950/90 border-t border-zinc-800/80 px-3 sm:px-4 py-2" data-role="gm-session-bar">
 				<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-					<!-- Indicatore Stato Sessione Master -->
 					<div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800">
 						<span class="w-2.5 h-2.5 rounded-full bg-rose-500" data-show-if="isSessionClosed"></span>
 						<span class="hidden w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" data-show-if="isSessionHosting"></span>
-						<span class="text-zinc-200 font-semibold" data-field="p2pHostStatus">Sessione Live: Chiusa</span>
+						<span class="text-zinc-200 font-semibold" data-field="p2pHostStatus"></span>
 					</div>
 
 					<div class="flex flex-wrap items-center gap-2">
-						<button class="hidden px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-action="inspectSharedCharacterFromDrive" data-role="auth-logged-in" type="button">
-							Apri PG Condiviso da Drive
-						</button>
-
-						<button class="px-3.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow" data-action="startP2PHost" data-show-if="isSessionClosed" type="button">
-							&#9654; Avvia Sessione Live
-						</button>
-
-						<button class="hidden px-3.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold shadow" data-action="stopP2PHost" data-show-if="isSessionHosting" type="button">
-							&#9632; Chiudi Sessione Live
-						</button>
-
-						<button class="hidden px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="pushCampaignUpdate" data-role="auth-logged-in" type="button">
-							💾 Salva su Drive &amp; Invia Push
-						</button>
+						<button class="hidden px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-action="inspectSharedCharacterFromDrive" data-i18n="gm.openSharedPcBtn" data-role="auth-logged-in" type="button"></button>
+						<button class="px-3.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow" data-action="startP2PHost" data-i18n="gm.startSessionBtn" data-show-if="isSessionClosed" type="button"></button>
+						<button class="hidden px-3.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold shadow" data-action="stopP2PHost" data-i18n="gm.stopSessionBtn" data-show-if="isSessionHosting" type="button"></button>
+						<button class="hidden px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold" data-action="pushCampaignUpdate" data-i18n="gm.saveAndPushBtn" data-role="auth-logged-in" type="button"></button>
 					</div>
 				</div>
 			</div>
 		</header>
 
-		<!-- Main Grid Responsive (12 Colonne su Desktop) -->
+		<!-- Main Grid Responsive (12 Columns on Desktop) -->
 		<main class="max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
 
-			<!-- Area Regia Principale (8 Colonne su Desktop) -->
+			<!-- Main Control Area (8 Columns on Desktop) -->
 			<section class="lg:col-span-8 flex flex-col gap-5">
 
-				<!-- 1. Configurazione Manifesto Campagna & Condivisione Drive -->
+				<!-- 1. Campaign Rules & Drive Sharing -->
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4" data-role="gm-campaign-settings">
 					<div class="flex flex-wrap items-center justify-between gap-2">
-						<h2 class="text-sm font-bold uppercase tracking-wider text-indigo-400">Regole &amp; Permessi Campagna</h2>
-						<span class="text-xs text-zinc-400">ID Stanza: <strong class="text-zinc-200 select-all" data-field="campaignId">-</strong></span>
+						<h2 class="text-sm font-bold uppercase tracking-wider text-indigo-400" data-i18n="gm.rulesHeader"></h2>
+						<span class="text-xs text-zinc-400"><span data-i18n="gm.roomIdLabel"></span> <strong class="text-zinc-200 select-all" data-field="campaignId"></strong></span>
 					</div>
 
 					<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 						<div class="sm:col-span-2">
-							<label class="block text-xs text-zinc-400 mb-1">Nome Campagna</label>
+							<label class="block text-xs text-zinc-400 mb-1" data-i18n="gm.campaignNameLabel"></label>
 							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm font-bold text-white" data-action="updateCampaignRule" data-field="campaignName" type="text" />
 						</div>
 						<div>
-							<label class="block text-xs text-zinc-400 mb-1">Livello Massimo PG</label>
+							<label class="block text-xs text-zinc-400 mb-1" data-i18n="gm.maxLevelLabel"></label>
 							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm font-bold text-amber-400 text-center" data-action="updateCampaignRule" data-field="rules.maxLevel" max="20" min="1" type="number" />
 						</div>
 					</div>
 
-					<!-- Permessi Checkbox Giocatori -->
 					<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1 text-xs text-zinc-300">
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.shopOpen" type="checkbox" />
-							<span>Negozio Downtime Aperto</span>
+							<span data-i18n="gm.ruleShopOpen"></span>
 						</label>
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.allowManualLevelUp" type="checkbox" />
-							<span>Level-Up Libero oltre il Max</span>
+							<span data-i18n="gm.ruleFreeLevelUp"></span>
 						</label>
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.allowManualAbilityEdit" type="checkbox" />
-							<span>Modifica Libera Caratteristiche</span>
+							<span data-i18n="gm.ruleFreeAbilities"></span>
 						</label>
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.allowManualMoneyEdit" type="checkbox" />
-							<span>Modifica Manuale Monete</span>
+							<span data-i18n="gm.ruleFreeMoney"></span>
 						</label>
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.allowFreeItemAddition" type="checkbox" />
-							<span>Aggiunta Oggetti fuori Negozio</span>
+							<span data-i18n="gm.ruleFreeItems"></span>
 						</label>
 						<label class="flex items-center gap-2 p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 cursor-pointer">
 							<input class="rounded text-indigo-500" data-action="updateCampaignRule" data-field="rules.allowFreeSpellAddition" type="checkbox" />
-							<span>Aggiunta Libera Incantesimi</span>
+							<span data-i18n="gm.ruleFreeSpells"></span>
 						</label>
 					</div>
 
-					<!-- Condivisione Drive con Email Giocatore -->
 					<div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-zinc-800">
-						<input class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white" data-field="sharePlayerEmail" placeholder="Email Google del giocatore da autorizzare (es. giocatore@gmail.com)..." type="email" />
-						<button class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white whitespace-nowrap" data-action="shareCampaignWithPlayerEmail" type="button">
-							Condividi Campagna su Drive (Sola Lettura)
-						</button>
+						<input class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white" data-field="sharePlayerEmail" data-i18n-placeholder="gm.shareEmailPlaceholder" type="email" />
+						<button class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white whitespace-nowrap" data-action="shareCampaignWithPlayerEmail" data-i18n="gm.shareCampaignBtn" type="button"></button>
 					</div>
 				</div>
 
-				<!-- 2. Dashboard Party & Verifica Conformità (Snapshot Audit) -->
+				<!-- 2. Party Dashboard & Snapshot Audit -->
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
-					<h2 class="text-sm font-bold uppercase tracking-wider text-emerald-400">Party Connesso &amp; Schede Giocatori</h2>
-					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="gm-party-cards">
-						Nessun giocatore connesso in P2P o caricato da Google Drive.
-					</p>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-emerald-400" data-i18n="gm.partyHeader"></h2>
+					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="gm-party-cards" data-i18n="gm.emptyParty"></p>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-3" data-list="gm-party-cards"></div>
 				</div>
 
-				<!-- 3. Gestore Negozio di Campagna (Catalogo SQLite -> Listino Master) -->
+				<!-- 3. Campaign Downtime Shop Manager -->
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
-					<h2 class="text-sm font-bold uppercase tracking-wider text-amber-400">Gestione Negozio di Downtime</h2>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-amber-400" data-i18n="gm.shopHeader"></h2>
 
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<!-- Listino Attivo nel Negozio -->
 						<div class="space-y-2">
-							<h3 class="text-xs font-semibold text-zinc-300">Merce Attualmente in Vendita</h3>
-							<p class="text-xs text-zinc-500 py-4 text-center" data-empty="gm-shop-inventory">Il negozio è vuoto.</p>
+							<h3 class="text-xs font-semibold text-zinc-300" data-i18n="gm.shopActiveTitle"></h3>
+							<p class="text-xs text-zinc-500 py-4 text-center" data-empty="gm-shop-inventory" data-i18n="gm.emptyShop"></p>
 							<div class="space-y-2 max-h-80 overflow-y-auto pr-1" data-list="gm-shop-inventory"></div>
 						</div>
 
-						<!-- Ricerca Oggetti nel Compendio SQLite per aggiungerli al Negozio -->
 						<div class="space-y-2">
-							<h3 class="text-xs font-semibold text-zinc-300">Aggiungi dal Compendio SQLite</h3>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white" data-action="searchDbShopCatalog" data-event="input" placeholder="Filtra oggetti (es. Pozione, Spada, Mantello)..." type="search" />
+							<h3 class="text-xs font-semibold text-zinc-300" data-i18n="gm.shopCatalogTitle"></h3>
+							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white" data-action="searchDbShopCatalog" data-event="input" data-i18n-placeholder="gm.shopSearchPlaceholder" type="search" />
 							<div class="space-y-1.5 max-h-72 overflow-y-auto pr-1" data-list="gm-db-items-catalog"></div>
 						</div>
 					</div>
@@ -175,10 +190,10 @@
 
 			</section>
 
-			<!-- Colonna Destra: Dadi Master & Registro Tiri Party (4 Colonne su Desktop) -->
+			<!-- Right Column: GM Dice & Live Party Roll Log (4 Columns on Desktop) -->
 			<aside class="lg:col-span-4 flex flex-col gap-4">
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-3 sticky top-28">
-					<h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Dadi Dungeon Master</h3>
+					<h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400" data-i18n="gm.gmDiceTitle"></h3>
 					<div class="grid grid-cols-4 gap-1.5">
 						<button class="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold" data-action="quickRollDie" data-die="1d4" type="button">d4</button>
 						<button class="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold" data-action="quickRollDie" data-die="1d6" type="button">d6</button>
@@ -190,43 +205,41 @@
 					</div>
 
 					<div class="border-t border-zinc-800 pt-3">
-						<h4 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Registro Tiri Live</h4>
+						<h4 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2" data-i18n="gm.liveDiceLogTitle"></h4>
 						<div class="space-y-2 max-h-96 overflow-y-auto pr-1" data-list="dice-log"></div>
 					</div>
 				</div>
 			</aside>
 		</main>
 
-		<!-- Modale Responsive di Ispezione Completa Scheda PG -->
+		<!-- Responsive Player Sheet Inspection Modal -->
 		<div class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6" id="gm-inspect-modal">
 			<div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
 				<div class="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-					<h3 class="text-sm font-bold text-white">Ispezione Scheda Giocatore</h3>
-					<button class="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200" data-action="closeInspectModal" type="button">
-						Chiudi &times;
-					</button>
+					<h3 class="text-sm font-bold text-white" data-i18n="gm.inspectModalTitle"></h3>
+					<button class="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200" data-action="closeInspectModal" data-i18n="common.close" type="button"></button>
 				</div>
 				<div class="p-4 overflow-y-auto space-y-4 text-xs" data-role="gm-inspect-sheet-container">
 					<div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
 						<div>
-							<h4 class="text-lg font-bold text-white" data-field="name">Nome PG</h4>
+							<h4 class="text-lg font-bold text-white" data-field="name"></h4>
 							<p class="text-zinc-400">
-								Liv. <span data-field="level">1</span> &bull; <span data-field="race">-</span> &bull; <span data-field="classesRaw">-</span>
+								<span data-i18n="common.levelShort"></span> <span data-field="level"></span> &bull; <span data-field="race"></span> &bull; <span data-field="classesRaw"></span>
 							</p>
 						</div>
 						<div class="text-right">
-							<span class="text-emerald-400 font-bold">PF: <span data-field="hp.current">0</span>/<span data-field="hp.max">0</span></span>
-							<p class="text-amber-400">Oro: <span data-field="money.gp">0</span> mo, <span data-field="money.sp">0</span> ma, <span data-field="money.cp">0</span> mr</p>
+							<span class="text-emerald-400 font-bold">HP: <span data-field="hp.current"></span>/<span data-field="hp.max"></span></span>
+							<p class="text-amber-400"><span data-i18n="gm.goldLabel"></span> <span data-field="money.gp"></span> gp, <span data-field="money.sp"></span> sp, <span data-field="money.cp"></span> cp</p>
 						</div>
 					</div>
 					<div class="grid grid-cols-2 sm:grid-cols-6 gap-2" data-list="abilities"></div>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
-							<h5 class="font-bold text-zinc-300 mb-2">Incantesimi</h5>
+							<h5 class="font-bold text-zinc-300 mb-2" data-i18n="pc.tabSpells"></h5>
 							<div class="space-y-2" data-list="spells"></div>
 						</div>
 						<div>
-							<h5 class="font-bold text-zinc-300 mb-2">Equipaggiamento</h5>
+							<h5 class="font-bold text-zinc-300 mb-2" data-i18n="pc.tabItems"></h5>
 							<div class="space-y-2" data-list="items"></div>
 						</div>
 					</div>
@@ -237,7 +250,7 @@
 		</div>
 
 		<!-- ===================================================================== -->
-		<!-- DEFINIZIONE DEI TAG <template> NATIVI PER IL MASTER                   -->
+		<!-- NATIVE <template> TAGS FOR GM                                         -->
 		<!-- ===================================================================== -->
 
 		<template id="tpl-gm-party-card">
@@ -245,28 +258,24 @@
 				<div>
 					<div class="flex items-start justify-between gap-2">
 						<div>
-							<h4 class="font-bold text-base text-white" data-field="name">Nome PG</h4>
-							<p class="text-xs text-zinc-400">Liv. <span data-field="level">1</span> &bull; <span data-field="race">Razza</span> &bull; <span data-field="classesRaw">Classe</span></p>
+							<h4 class="font-bold text-base text-white" data-field="name"></h4>
+							<p class="text-xs text-zinc-400"><span data-i18n="common.levelShort"></span> <span data-field="level"></span> &bull; <span data-field="race"></span> &bull; <span data-field="classesRaw"></span></p>
 						</div>
 						<div class="flex flex-col items-end gap-1">
-							<span class="text-[10px] font-bold text-zinc-300" data-field="connectionBadge">🟢 Online Live</span>
-							<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-xs font-bold" data-field="hpSummary">10/10 PF</span>
+							<span class="text-[10px] font-bold text-zinc-300" data-field="connectionBadge"></span>
+							<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-xs font-bold" data-field="hpSummary"></span>
 						</div>
 					</div>
-					<div class="text-xs text-amber-400 font-semibold mt-1">Patrimonio: <span data-field="wealthSummary">0 mo</span></div>
+					<div class="text-xs text-amber-400 font-semibold mt-1"><span data-i18n="gm.wealthLabel"></span> <span data-field="wealthSummary"></span></div>
 					<div class="mt-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px]">
 						<span class="text-emerald-400 font-medium" data-show-if="isAuditValid">&#10003; </span>
 						<span class="text-rose-400 font-bold" data-show-if="hasAuditWarning">&#9888; </span>
-						<span class="text-zinc-300" data-field="auditStatusText">Stato conformità</span>
+						<span class="text-zinc-300" data-field="auditStatusText"></span>
 					</div>
 				</div>
 				<div class="flex gap-2 pt-1">
-					<button class="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200" data-action="inspectPlayerSheet" type="button">
-						Ispeziona Scheda
-					</button>
-					<button class="flex-1 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-xs font-semibold text-indigo-300" data-action="approvePlayerSnapshot" type="button">
-						Approva Snapshot
-					</button>
+					<button class="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200" data-action="inspectPlayerSheet" data-i18n="gm.inspectBtn" type="button"></button>
+					<button class="flex-1 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-xs font-semibold text-indigo-300" data-action="approvePlayerSnapshot" data-i18n="gm.approveSnapshotBtn" type="button"></button>
 				</div>
 			</div>
 		</template>
@@ -274,16 +283,16 @@
 		<template id="tpl-gm-shop-row">
 			<div class="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
 				<div class="min-w-[120px] flex-1">
-					<span class="font-bold text-white block" data-field="name">Oggetto</span>
-					<span class="text-[11px] text-amber-400" data-field="priceGpLabel">0 mo</span>
+					<span class="font-bold text-white block" data-field="name"></span>
+					<span class="text-[11px] text-amber-400" data-field="priceGpLabel"></span>
 				</div>
 				<div class="flex items-center gap-2">
 					<label class="text-[10px] text-zinc-400">
-						Prezzo (mr/cp)
+						<span data-i18n="gm.priceCpLabel"></span>
 						<input class="w-20 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-amber-300 text-center" data-action="updateShopItemField" data-field="priceCp" type="number" />
 					</label>
 					<label class="text-[10px] text-zinc-400">
-						Q.tà
+						<span data-i18n="gm.qtyLabel"></span>
 						<input class="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-zinc-200 text-center" data-action="updateShopItemField" data-field="stock" type="number" />
 					</label>
 					<label class="flex items-center gap-1 text-[10px] text-zinc-400 cursor-pointer">
@@ -298,22 +307,19 @@
 		<template id="tpl-gm-catalog-item-row">
 			<div class="rounded-lg border border-zinc-800/80 bg-zinc-950/70 px-2.5 py-1.5 flex items-center justify-between gap-2 text-xs">
 				<div>
-					<span class="font-medium text-zinc-200" data-field="name">Oggetto DB</span>
-					<span class="text-[10px] text-zinc-500 ml-1" data-field="rarity">Comune</span>
+					<span class="font-medium text-zinc-200" data-field="name"></span>
+					<span class="text-[10px] text-zinc-500 ml-1" data-field="rarity"></span>
 					<span class="text-[10px] text-amber-400 ml-1" data-field="defaultPriceGp"></span>
 				</div>
-				<button class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[11px]" data-action="addDbItemToShop" type="button">
-					+ Vendi
-				</button>
+				<button class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[11px]" data-action="addDbItemToShop" data-i18n="gm.sellBtn" type="button"></button>
 			</div>
 		</template>
 
-		<!-- Template condivisi per il modale di ispezione scheda e registro dadi -->
 		<template id="tpl-ability-card">
 			<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-center">
-				<div class="text-[10px] text-zinc-400 uppercase" data-field="abilityLabel">Forza</div>
-				<div class="text-base font-bold text-amber-400" data-field="modifier">+0</div>
-				<div class="text-[11px] text-zinc-300" data-field="score">10</div>
+				<div class="text-[10px] text-zinc-400 uppercase" data-field="abilityLabel"></div>
+				<div class="text-base font-bold text-amber-400" data-field="modifier"></div>
+				<div class="text-[11px] text-zinc-300" data-field="score"></div>
 			</div>
 		</template>
 
@@ -323,35 +329,6 @@
 		<template id="tpl-feat-row">
 			<div></div>
 		</template>
-
-		<template id="tpl-spell-row">
-			<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-2">
-				<span class="font-bold text-white" data-field="name">Incantesimo</span>
-				<span class="text-[10px] text-indigo-400 ml-1" data-field="levelLabel"></span>
-			</div>
-		</template>
-
-		<template id="tpl-item-row">
-			<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-2">
-				<span class="font-bold text-white" data-field="name">Oggetto</span>
-				<span class="text-amber-400 ml-1">x<span data-field="count">1</span></span>
-			</div>
-		</template>
-
-		<template id="tpl-dice-log-row">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-950/90 p-2.5 text-xs flex items-center justify-between gap-2">
-				<div>
-					<div class="flex items-center gap-1.5">
-						<strong class="text-indigo-400" data-field="rollerName">Giocatore</strong>
-						<span class="text-[10px] text-zinc-500" data-field="time">00:00</span>
-					</div>
-					<div class="text-zinc-300 font-medium" data-field="rollLabel">Lancio</div>
-					<div class="text-[11px] text-zinc-500"><span data-field="notation">1d20</span> &rarr; <span data-field="rollsBreakdown">[10]</span></div>
-				</div>
-				<div class="text-xl font-black text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800" data-field="total">20</div>
-			</div>
-		</template>
-
 		<template id="tpl-attack-row">
 			<div></div>
 		</template>
@@ -363,6 +340,34 @@
 		</template>
 		<template id="tpl-companion-card">
 			<div></div>
+		</template>
+
+		<template id="tpl-spell-row">
+			<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-2">
+				<span class="font-bold text-white" data-field="name"></span>
+				<span class="text-[10px] text-indigo-400 ml-1" data-field="levelLabel"></span>
+			</div>
+		</template>
+
+		<template id="tpl-item-row">
+			<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-2">
+				<span class="font-bold text-white" data-field="name"></span>
+				<span class="text-amber-400 ml-1">x<span data-field="count"></span></span>
+			</div>
+		</template>
+
+		<template id="tpl-dice-log-row">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/90 p-2.5 text-xs flex items-center justify-between gap-2">
+				<div>
+					<div class="flex items-center gap-1.5">
+						<strong class="text-indigo-400" data-field="rollerName"></strong>
+						<span class="text-[10px] text-zinc-500" data-field="time"></span>
+					</div>
+					<div class="text-zinc-300 font-medium" data-field="rollLabel"></div>
+					<div class="text-[11px] text-zinc-500"><span data-field="notation"></span> &rarr; <span data-field="rollsBreakdown"></span></div>
+				</div>
+				<div class="text-xl font-black text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800" data-field="total"></div>
+			</div>
 		</template>
 
 		<script src="./js/gm-app.js" type="module"></script>

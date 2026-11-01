@@ -1,7 +1,7 @@
 // js/importers/fc5e-xml-importer.js
-import {CORE_ABILITIES, CORE_SKILLS} from '../config.js';
 import {dbService} from '../db-service.js';
-import {getAbilityModifier} from '../formula-engine.js';
+import {CORE_ABILITIES, CORE_SKILLS, getAbilityModifier} from '../formula-engine.js';
+import {i18nService} from '../i18n-service.js';
 
 const HD_FACES_MAP = {1: 6, 2: 8, 3: 10, 4: 12};
 
@@ -14,31 +14,6 @@ const SPELL_SCHOOL_MAP = {
 	6: 'Illusion',
 	7: 'Necromancy',
 	8: 'Transmutation'
-};
-
-const DAMAGE_TYPE_MAP = {
-	1: 'Contundente',
-	2: 'Perforante',
-	3: 'Tagliente',
-	4: 'Acido',
-	5: 'Freddo',
-	6: 'Fuoco',
-	7: 'Forza',
-	8: 'Fulmine',
-	9: 'Necrotico',
-	10: 'Veleno',
-	11: 'Psichico',
-	12: 'Tuono',
-	13: 'Radioso'
-};
-
-const MONSTER_SIZE_MAP = {
-	0: 'Minuscola (Tiny)',
-	1: 'Piccola (Small)',
-	2: 'Media (Medium)',
-	3: 'Grande (Large)',
-	4: 'Enorme (Huge)',
-	5: ' Mastodontica (Gargantuan)'
 };
 
 const ABILITY_INDEX_TO_KEY = {
@@ -82,27 +57,19 @@ export class FightClub5eXmlImporter {
 		return Number.isNaN(num) ? fallback : num;
 	}
 
-	/**
-	 * Pulisce i nomi customizzati (es. "[Armorer] Magic Missile", "🔥 Punizione Incandescente [Concentrazione]",
-	 * "⚡ Fulmine Adescante (Lightning Lure)") per massimizzare il match col DB SQLite.
-	 */
 	cleanNameForDbLookup(rawName) {
 		if (!rawName) return '';
 		let s = String(rawName).trim();
 
-		// Se c'è un nome inglese tra parentesi (es. "Fulmine Adescante (Lightning Lure)"), estrailo come candidato
 		const parenMatch = s.match(/\(([A-Za-z'\s/-]+)\)\s*$/);
 		if (parenMatch && !/1st|2nd|3rd|Guardian|Infiltrator|Intelligence/i.test(parenMatch[1])) {
 			return parenMatch[1].trim();
 		}
 
-		// Rimuove prefissi tra parentesi quadre (es. "[Infusion] ", "[Quandrix] ")
 		s = s.replace(/^\[[^\]]+\]\s*/g, '');
-		// Rimuove suffissi tra parentesi quadre o dopo barra verticale (es. "[Concentrazione]", "¦ CA12...")
 		s = s.replace(/\s*\[[^\]]+\].*$/g, '');
 		s = s.replace(/\s*[¦|].*$/g, '');
 		s = s.replace(/\s+DAL LIVELLO\s+\d+.*$/i, '');
-		// Rimuove emoji iniziali
 		s = s.replace(/^[^\w\sÀ-ÿ'()-]+/g, '').trim();
 		return s || rawName.trim();
 	}
@@ -135,7 +102,7 @@ export class FightClub5eXmlImporter {
 
 	parseFeatNode(featEl, originLabel = '') {
 		const text = this.getText(featEl, 'text', '');
-		const rawName = this.getText(featEl, 'name', 'Privilegio');
+		const rawName = this.getText(featEl, 'name', 'Feature');
 		return {
 			table: 'feats',
 			name: rawName,
@@ -150,7 +117,7 @@ export class FightClub5eXmlImporter {
 	}
 
 	parseSpellNode(spellEl, originLabel = '', spellAbilityKey = 'int') {
-		const rawName = this.getText(spellEl, 'name', 'Incantesimo');
+		const rawName = this.getText(spellEl, 'name', 'Spell');
 		const text = this.getText(spellEl, 'text', '');
 		const schoolCode = this.getNumber(spellEl, 'school', 0);
 		const v = this.getNumber(spellEl, 'v', 0) === 1;
@@ -189,11 +156,10 @@ export class FightClub5eXmlImporter {
 	parseTrackerNode(trEl, originLabel = '') {
 		const resetCode = this.getNumber(trEl, 'resetType', 2);
 		return {
-			label: this.getText(trEl, 'label', 'Risorsa'),
+			label: this.getText(trEl, 'label', 'Resource'),
 			origin: originLabel,
 			type: this.getNumber(trEl, 'type', 0),
 			resetType: resetCode,
-			resetLabel: resetCode === 1 ? 'Riposo Breve' : 'Riposo Lungo',
 			current: this.getNumber(trEl, 'value', 0),
 			maxFormula: this.getText(trEl, 'formula', '0'),
 			max: this.getNumber(trEl, 'formula', this.getNumber(trEl, 'value', 0))
@@ -201,7 +167,7 @@ export class FightClub5eXmlImporter {
 	}
 
 	parseItemNode(itemEl, containerName = '') {
-		const rawName = this.getText(itemEl, 'name', 'Oggetto');
+		const rawName = this.getText(itemEl, 'name', 'Item');
 		const text = this.getText(itemEl, 'text', '');
 		const slot = this.getNumber(itemEl, 'slot', 0);
 		const typeCode = this.getNumber(itemEl, 'type', 0);
@@ -209,12 +175,12 @@ export class FightClub5eXmlImporter {
 		const dmg1H = this.getText(itemEl, 'damage1H', '');
 		const dmg2H = this.getText(itemEl, 'damage2H', '');
 		const dmgTypeCode = this.getNumber(itemEl, 'damageType', 0);
-		const dmgTypeLabel = DAMAGE_TYPE_MAP[dmgTypeCode] || '';
+		const dmgTypeLabel = dmgTypeCode ? i18nService.t(`damageTypes.${dmgTypeCode}`, '') : '';
 		const imgEl = this.directChild(itemEl, 'imageData');
 
 		let damageStr = '';
 		if (dmg1H) {
-			damageStr = `${dmg1H}${dmg2H ? ` (2M: ${dmg2H})` : ''}${dmgTypeLabel ? ` ${dmgTypeLabel}` : ''}`;
+			damageStr = `${dmg1H}${dmg2H ? ` (2H: ${dmg2H})` : ''}${dmgTypeLabel ? ` ${dmgTypeLabel}` : ''}`;
 		}
 
 		return {
@@ -235,7 +201,7 @@ export class FightClub5eXmlImporter {
 			damage: damageStr,
 			damage1H: dmg1H,
 			damage2H: dmg2H,
-			damageType: dmgTypeLabel,
+			damageTypeCode: dmgTypeCode,
 			imageUid: imgEl ? this.getText(imgEl, 'uid', null) : null,
 			mods: this.parseModNodes(itemEl),
 			text
@@ -267,14 +233,14 @@ export class FightClub5eXmlImporter {
 			const abIdx = this.getNumber(stEl, 'ability', 0);
 			const abInfo = CORE_ABILITIES[abIdx] || CORE_ABILITIES[0];
 			const mod = this.getNumber(stEl, 'modifier', 0);
-			return `${abInfo.label_ita} ${mod >= 0 ? `+${mod}` : mod}`;
+			return {abilityKey: abInfo.key, modifier: mod};
 		});
 
 		const skills = this.directChildren(monsterEl, 'skill').map((skEl) => {
 			const skId = this.getNumber(skEl, 'id', 0);
 			const skInfo = CORE_SKILLS.find((k) => k.monsterId === skId);
 			const mod = this.getNumber(skEl, 'modifier', 0);
-			return `${skInfo ? skInfo.label_ita : `Abilità #${skId}`} ${mod >= 0 ? `+${mod}` : mod}`;
+			return {skillKey: skInfo ? skInfo.key : `skill_${skId}`, modifier: mod};
 		});
 
 		const traits = this.directChildren(monsterEl, 'trait').map((el) => ({
@@ -306,7 +272,7 @@ export class FightClub5eXmlImporter {
 			name: rawName,
 			lookupName: this.cleanNameForDbLookup(rawName),
 			imageUid: imgEl ? this.getText(imgEl, 'uid', null) : null,
-			size: MONSTER_SIZE_MAP[sizeCode] || String(sizeCode),
+			sizeCode,
 			type: this.getText(monsterEl, 'type', ''),
 			alignment: this.getText(monsterEl, 'alignment', ''),
 			ac: this.getText(monsterEl, 'ac', '10'),
@@ -338,10 +304,9 @@ export class FightClub5eXmlImporter {
 
 		const parseError = xmlDoc.querySelector('parsererror');
 		if (parseError) {
-			throw new Error('File XML non valido: ' + parseError.textContent);
+			throw new Error('Invalid XML: ' + parseError.textContent);
 		}
 
-		// Fight Club 5e usa <pc version="5"><character>...</character></pc>
 		const pcRoot = xmlDoc.querySelector('pc') || xmlDoc.documentElement;
 		const charNode =
 			this.directChild(pcRoot, 'character') ||
@@ -349,10 +314,9 @@ export class FightClub5eXmlImporter {
 			xmlDoc.querySelector('player');
 
 		if (!charNode) {
-			throw new Error('Formato XML non riconosciuto: nodo <character> non trovato.');
+			throw new Error('Unrecognized XML format: <character> node not found.');
 		}
 
-		// 1. Estrazione <imageData> globali in fondo a <pc>
 		const extractedImages = {};
 		this.directChildren(pcRoot, 'imageData').forEach((imgNode) => {
 			const uid = this.getText(imgNode, 'uid', '');
@@ -365,7 +329,6 @@ export class FightClub5eXmlImporter {
 		const charImgNode = this.directChild(charNode, 'imageData');
 		const characterImageUid = charImgNode ? this.getText(charImgNode, 'uid', null) : null;
 
-		// 2. Punteggi di caratteristica base (<abilities>8,14,15,15,10,8,</abilities>)
 		const rawAbParts = this.getText(charNode, 'abilities', '10,10,10,10,10,10')
 		                       .split(',')
 		                       .map((s) => s.trim())
@@ -387,7 +350,6 @@ export class FightClub5eXmlImporter {
 		const rawFeats = [];
 		const trackers = [];
 
-		// 3. Parsing <race>
 		const raceNode = this.directChild(charNode, 'race');
 		let raceName = '';
 		let raceDetails = {};
@@ -410,16 +372,15 @@ export class FightClub5eXmlImporter {
 
 			const raceSpellAb = ABILITY_INDEX_TO_KEY[this.getNumber(raceNode, 'spellAbility', 3)] || 'int';
 			this.directChildren(raceNode, 'feat').forEach((f) => {
-				const parsedF = this.parseFeatNode(f, `Razza: ${raceName}`);
+				const parsedF = this.parseFeatNode(f, raceName);
 				allMods.push(...parsedF.mods);
 				rawFeats.push(parsedF);
 			});
 			this.directChildren(raceNode, 'spell').forEach((sp) => {
-				rawSpells.push(this.parseSpellNode(sp, `Razza/Infusione`, raceSpellAb));
+				rawSpells.push(this.parseSpellNode(sp, raceName, raceSpellAb));
 			});
 		}
 
-		// 4. Parsing <background>
 		const bgNode = this.directChild(charNode, 'background');
 		let backgroundName = '';
 		let alignment = '';
@@ -440,19 +401,18 @@ export class FightClub5eXmlImporter {
 				                                                   proficiencyCodes.add(Number(p.textContent.trim()))
 			);
 			this.directChildren(bgNode, 'feat').forEach((f) => {
-				const parsedF = this.parseFeatNode(f, `Background: ${backgroundName}`);
+				const parsedF = this.parseFeatNode(f, backgroundName);
 				allMods.push(...parsedF.mods);
 				rawFeats.push(parsedF);
 			});
 		}
 
-		// 5. Parsing Multiclasse (tutti i nodi <class>, ignorando <autolevel>)
 		const classNodes = this.directChildren(charNode, 'class');
 		const classesList = [];
 		let primarySpellAbility = 'int';
 
 		classNodes.forEach((clsNode, idx) => {
-			const clsName = this.getText(clsNode, 'name', 'Classe');
+			const clsName = this.getText(clsNode, 'name', 'Class');
 			const clsLevel = this.getNumber(clsNode, 'level', 1);
 			const hdCode = this.getNumber(clsNode, 'hd', 2);
 			const hdFaces = HD_FACES_MAP[hdCode] || 8;
@@ -482,9 +442,8 @@ export class FightClub5eXmlImporter {
 				                 level: clsLevel,
 				                 hdFaces,
 				                 hdCurrent,
-				                 hdLabel: `${hdCurrent}/${clsLevel}d${hdFaces}`,
 				                 spellcastingAbility: clsSpellAbility,
-				                 slotsReset: this.getNumber(clsNode, 'slotsReset', 2), // 1 = Short Rest (Warlock), 2 = Long Rest
+				                 slotsReset: this.getNumber(clsNode, 'slotsReset', 2),
 				                 slotsMax: slotsMaxArr,
 				                 slotsCurrent: slotsCurArr,
 				                 armorProficiencies: this.getText(clsNode, 'armor', ''),
@@ -492,7 +451,6 @@ export class FightClub5eXmlImporter {
 				                 toolProficiencies: this.getText(clsNode, 'tools', '')
 			                 });
 
-			// Solo i figli diretti di <class> (ignora <autolevel>)
 			this.directChildren(clsNode, 'feat').forEach((f) => {
 				const parsedF = this.parseFeatNode(f, `${clsName} ${clsLevel}`);
 				allMods.push(...parsedF.mods);
@@ -512,31 +470,29 @@ export class FightClub5eXmlImporter {
 			classesList.reduce((acc, c) => acc + (Number(c.level) || 0), 0) ||
 			this.getNumber(charNode, 'level', 1);
 		const classesSummary =
-			classesList.map((c) => `${c.name} ${c.level}`).join(' / ') || 'Avventuriero 1';
+			classesList.map((c) => `${c.name} ${c.level}`).join(' / ') || 'Adventurer 1';
 
-		// 6. Talenti, Tracker e Attacchi diretti sotto <character>
 		this.directChildren(charNode, 'feat').forEach((f) => {
-			const parsedF = this.parseFeatNode(f, 'Talento PG');
+			const parsedF = this.parseFeatNode(f, 'Feat');
 			allMods.push(...parsedF.mods);
 			rawFeats.push(parsedF);
 		});
 
 		this.directChildren(charNode, 'tracker').forEach((t) => {
-			trackers.push(this.parseTrackerNode(t, 'Personaggio'));
+			trackers.push(this.parseTrackerNode(t, ''));
 		});
 
 		const attacks = this.directChildren(charNode, 'attack').map((atkEl) => {
 			const dmgTypeCode = this.getNumber(atkEl, 'damageType', 0);
 			return {
-				name: this.getText(atkEl, 'name', 'Attacco'),
-				type: this.getNumber(atkEl, 'type', 1) === 2 ? 'Distanza' : 'Mischia',
+				name: this.getText(atkEl, 'name', 'Attack'),
+				typeCode: this.getNumber(atkEl, 'type', 1),
 				attackBonusFormula: this.getText(atkEl, 'attackBonus', '0'),
 				damageFormula: this.getText(atkEl, 'damage', '1d6'),
-				damageType: DAMAGE_TYPE_MAP[dmgTypeCode] || ''
+				damageTypeCode: dmgTypeCode
 			};
 		});
 
-		// 7. Oggetti diretti, Contenitori e Monete
 		const money = {pp: 0, gp: 0, ep: 0, sp: 0, cp: 0};
 		const rawItems = [];
 		const containers = [];
@@ -557,26 +513,25 @@ export class FightClub5eXmlImporter {
 				return;
 			}
 			rawItems.push(parsedIt);
-			// Se è un'arma equipaggiata con danno, aggiungila anche agli attacchi rapidi se non già presente
 			if (parsedIt.damage1H && !attacks.some((a) => a.name === parsedIt.name)) {
 				const meleeAbIdx = this.getNumber(charNode, 'meleeAbility', 0);
 				const abToken = meleeAbIdx === 5 ? '%6' : '%1';
 				attacks.push({
 					             name: parsedIt.name,
-					             type: 'Arma',
+					             typeCode: 1,
 					             attackBonusFormula: `%8+${abToken}`,
 					             damageFormula: `${parsedIt.damage1H}+${abToken}`,
-					             damageType: parsedIt.damageType
+					             damageTypeCode: parsedIt.damageTypeCode
 				             });
 			}
 		};
 
 		this.directChildren(charNode, 'item').forEach((itEl) => {
-			processParsedItem(this.parseItemNode(itEl, 'Equipaggiato / Indosso'));
+			processParsedItem(this.parseItemNode(itEl, ''));
 		});
 
 		this.directChildren(charNode, 'container').forEach((contEl) => {
-			const contName = this.getText(contEl, 'label', '') || this.getText(contEl, 'name', 'Contenitore');
+			const contName = this.getText(contEl, 'label', '') || this.getText(contEl, 'name', 'Container');
 			containers.push({
 				                name: contName,
 				                carried: this.getNumber(contEl, 'carried', 1) === 1,
@@ -587,7 +542,6 @@ export class FightClub5eXmlImporter {
 			});
 		});
 
-		// 8. Calcolo Caratteristiche Effettive (Base + <mod category="1">) e CA
 		const effectiveAbilities = {...baseAbilities};
 		let acBonusFromMods = 0;
 
@@ -601,16 +555,13 @@ export class FightClub5eXmlImporter {
 			}
 		});
 
-		// Calcolo Classe Armatura (Armatura equipaggiata + Scudo + Mod Destrezza + Infusioni)
 		let calculatedAc = 10 + getAbilityModifier(effectiveAbilities.dex);
 		const equippedArmor = rawItems.find((i) => i.ac >= 11 && i.equipped);
 		if (equippedArmor) {
 			const dexMod = getAbilityModifier(effectiveAbilities.dex);
 			if (equippedArmor.typeCode === 3) {
-				// Heavy Armor (es. Chain Mail CA 16)
 				calculatedAc = equippedArmor.ac;
 			} else if (equippedArmor.typeCode === 2) {
-				// Medium Armor (es. Chain Shirt CA 13 + max 2 DEX)
 				calculatedAc = equippedArmor.ac + Math.min(2, dexMod);
 			} else {
 				calculatedAc = equippedArmor.ac + dexMod;
@@ -622,7 +573,6 @@ export class FightClub5eXmlImporter {
 		}
 		calculatedAc += acBonusFromMods;
 
-		// 9. Competenze Tiri Salvezza (0..5) e Abilità (100..117)
 		const savingThrowProficiencies = [];
 		const skillProficiencyKeys = [];
 
@@ -635,9 +585,8 @@ export class FightClub5eXmlImporter {
 			}
 		}
 
-		// 10. Note (<note>) e Compagni (<monster>)
 		const notesList = this.directChildren(charNode, 'note').map((nEl) => ({
-			name: this.getText(nEl, 'name', 'Nota'),
+			name: this.getText(nEl, 'name', 'Note'),
 			text: this.getText(nEl, 'text', ''),
 			archived: this.getNumber(nEl, 'archived', 0) === 1
 		}));
@@ -650,7 +599,6 @@ export class FightClub5eXmlImporter {
 			                                                                 this.parseMonsterNode(mEl)
 		);
 
-		// 11. Slot Incantesimo complessivi
 		const charSlotsMax = this.getText(charNode, 'slots', '')
 		                         .split(',')
 		                         .filter((s) => s.trim() !== '')
@@ -668,7 +616,6 @@ export class FightClub5eXmlImporter {
 				spellSlots.push({level: lvl, type: 'Standard', max: maxStd, current: curStd});
 			}
 		}
-		// Aggiunge eventuali slot Patto Magico (Warlock con slotsReset === 1)
 		classesList
 			.filter((c) => c.slotsReset === 1)
 			.forEach((warlockCls) => {
@@ -678,7 +625,7 @@ export class FightClub5eXmlImporter {
 					if (maxPact > 0) {
 						spellSlots.push({
 							                level: lvl,
-							                type: `Patto (${warlockCls.name})`,
+							                type: `${warlockCls.name}`,
 							                max: maxPact,
 							                current: curPact
 						                });
@@ -686,11 +633,10 @@ export class FightClub5eXmlImporter {
 				}
 			});
 
-		// 12. Risoluzione Batch degli ID immutabili sul DB SQLite
 		const character = {
 			localId: `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
 			fcUid: this.getText(charNode, 'uid', ''),
-			name: this.getText(charNode, 'name', 'Eroe Senza Nome'),
+			name: this.getText(charNode, 'name', 'Unnamed Hero'),
 			imageUid: characterImageUid,
 			imageDriveMap: {},
 			_pendingImages: extractedImages,
@@ -700,7 +646,7 @@ export class FightClub5eXmlImporter {
 			raceDetails,
 			background: backgroundName,
 			backgroundDetails,
-			alignment: alignment || 'Neutrale',
+			alignment: alignment || 'Neutral',
 			classes: classesList,
 			classesRaw: classesSummary,
 			spellcastingAbility: primarySpellAbility,
@@ -790,7 +736,7 @@ export class FightClub5eXmlImporter {
 					};
 				});
 			} catch (err) {
-				console.warn('Fallback su dati XML per la risoluzione DB:', err);
+				console.warn('DB batch resolution fallback:', err);
 			}
 		}
 
