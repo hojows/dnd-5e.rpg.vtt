@@ -1,0 +1,37 @@
+{
+  "common": {
+    "loginGoogle": "Accedi con Google Drive",
+    "logout": "Disconnetti",
+    "guestTitle": "Utente Ospite (Offline)",
+    "notConnectedDesc": "Accedi per sincronizzare PG e campagne sul tuo Google Drive.",
+    "connectedDesc": "Sincronizzazione Cloud attiva",
+    "vaultFolder": "Cartella Cloud:"
+  },
+  "db": {
+    "idle": "DB in attesa",
+    "initializing": "Inizializzazione SQLite...",
+    "downloading": "Download {pack} ({progress}%)",
+    "decompressing": "Decompressione {pack}...",
+    "ready": "DB Pronto ({lang} v{version})",
+    "error": "Errore DB: {error}"
+  },
+  "hub": {
+    "subtitle": "Architettura Serverless Offline-First • SQLite Wasm • Google Drive • P2P WebRTC",
+    "heroTitle": "Scegli la tua postazione di gioco",
+    "heroDesc": "Collega il tuo Google Drive dal menu utente in alto a destra per sincronizzare personaggi e campagne nel cloud, oppure lavora in locale.",
+    "pcBadge": "GARAGE & SESSIONE LIVE",
+    "pcTitle": "Area Giocatore (PC Screen)",
+    "pcDesc": "Crea o importa i tuoi personaggi da Fight Club 5e XML, consulta il compendio offline, fai acquisti nel Negozio di Downtime e lancia i dadi in tempo reale con il party.",
+    "pcBullet1": "• Salvataggio nel tuo Google Drive personale (solo il PG attivo resta in cache locale)",
+    "pcBullet2": "• Modalità Garage libera o vincolata alle regole della Campagna",
+    "pcBullet3": "• Layout responsive per smartphone, tablet e desktop",
+    "gmBadge": "REGIA & REGOLE CAMPAGNA",
+    "gmTitle": "Area Dungeon Master (GM Screen)",
+    "gmDesc": "Crea il manifesto della campagna, imposta il livello massimo e i permessi, allestisci il Negozio di Downtime pescando dal database SQLite e monitora le schede del party in tempo reale.",
+    "gmBullet1": "• Condivisione automatica in sola lettura con le email dei giocatori",
+    "gmBullet2": "• Audit automatico di oro, livello e acquisti di downtime dei PG",
+    "gmBullet3": "• Host WebRTC P2P per ricevere tiri e inviare aggiornamenti live",
+    "footer": "D&D 5e VTT — I database SQLite vengono memorizzati nella cache locale del browser per l'utilizzo offline.",
+    "toastConnected": "Connesso a Google Drive come {email}!"
+  }
+}

@@ -10,8 +10,7 @@ export const APP_CONFIG = {
 		MANIFEST_URL: './data/db-manifest.json',
 		IDB_NAME: 'DND5E_Compendium_Cache_v2',
 		IDB_STORE: 'sqlite_packs',
-		SQLJS_WASM_CDN: 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/',
-		DEFAULT_LANG: 'eng' // Parte in inglese scaricando solo il DB Core
+		SQLJS_WASM_CDN: 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'
 	},
 
 	WEBRTC: {

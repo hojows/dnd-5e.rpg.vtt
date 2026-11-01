@@ -1,7 +1,6 @@
 // js/db-service.js
 import {APP_CONFIG} from './config.js';
-
-const SESSION_LANG_KEY = 'dnd5e_vtt_active_lang';
+import {i18nService} from './i18n-service.js';
 
 class CompendiumDbService {
 	constructor() {
@@ -9,7 +8,7 @@ class CompendiumDbService {
 		this.reqCounter = 0;
 		this.pendingRequests = new Map();
 		this.statusListeners = new Set();
-		this.activeLang = sessionStorage.getItem(SESSION_LANG_KEY) || APP_CONFIG.DB.DEFAULT_LANG;
+		this.activeLang = i18nService.getLang(); // "eng" di default, oppure la lingua salvata in localStorage
 		this.entityCache = new Map();
 
 		this.state = {
@@ -25,9 +24,9 @@ class CompendiumDbService {
 		};
 	}
 
-	init(lang = this.activeLang) {
-		this.activeLang = lang;
-		sessionStorage.setItem(SESSION_LANG_KEY, this.activeLang);
+	async init(lang = this.activeLang) {
+		this.activeLang = lang || 'eng';
+		await i18nService.setLanguage(this.activeLang, document.body);
 
 		if (!this.worker) {
 			const workerUrl = new URL('./db-worker.js', import.meta.url);
@@ -92,11 +91,17 @@ class CompendiumDbService {
 	}
 
 	async setLanguage(newLang) {
-		if (newLang === this.activeLang && this.isReady()) return;
-		this.activeLang = newLang;
-		sessionStorage.setItem(SESSION_LANG_KEY, newLang);
+		const targetLang = newLang || 'eng';
+		await i18nService.setLanguage(targetLang, document.body);
+
+		if (targetLang === this.activeLang && this.isReady()) {
+			this.updateState({activeLang: targetLang});
+			return;
+		}
+
+		this.activeLang = targetLang;
 		this.entityCache.clear();
-		this.updateState({activeLang: newLang});
+		this.updateState({activeLang: targetLang});
 		await this.syncWithRemoteManifest();
 	}
 

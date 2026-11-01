@@ -141,9 +141,15 @@ class DomUiBinder {
 		containerEl.appendChild(fragment);
 	}
 
+	/**
+	 * Gestisce l'avatar Google / icona omino e il menu a scomparsa per Login/Logout.
+	 */
 	updateAuthWidget(rootEl, authState) {
 		if (!rootEl || !authState) return;
 		const isLogged = Boolean(authState.authenticated);
+		const pictureUrl = authState.user?.picture || '';
+		const userName = authState.user?.name || '';
+		const userEmail = authState.user?.email || '';
 
 		rootEl.querySelectorAll('[data-role="auth-logged-out"]').forEach((el) => {
 			el.classList.toggle('hidden', isLogged);
@@ -153,8 +159,64 @@ class DomUiBinder {
 			el.classList.toggle('hidden', !isLogged);
 		});
 
+		rootEl.querySelectorAll('[data-field="userName"]').forEach((el) => {
+			el.textContent = userName || userEmail;
+		});
+
 		rootEl.querySelectorAll('[data-field="userEmail"]').forEach((el) => {
-			el.textContent = authState.user?.email || '';
+			el.textContent = userEmail;
+		});
+
+		// Mostra l'avatar Google se autenticato e disponibile, altrimenti l'omino SVG
+		const showAvatarImg = isLogged && Boolean(pictureUrl);
+		rootEl.querySelectorAll('[data-role="user-avatar-img"]').forEach((imgEl) => {
+			if (showAvatarImg) {
+				imgEl.src = pictureUrl;
+				imgEl.classList.remove('hidden');
+			} else {
+				imgEl.removeAttribute('src');
+				imgEl.classList.add('hidden');
+			}
+		});
+
+		rootEl.querySelectorAll('[data-role="user-avatar-fallback"]').forEach((iconEl) => {
+			iconEl.classList.toggle('hidden', showAvatarImg);
+		});
+
+		rootEl.querySelectorAll('[data-role="user-status-dot"]').forEach((dotEl) => {
+			dotEl.classList.toggle('bg-emerald-400', isLogged);
+			dotEl.classList.toggle('bg-zinc-500', !isLogged);
+		});
+
+		// Chiude il menu a scomparsa dopo un cambio di stato Login/Logout
+		rootEl.querySelectorAll('[data-role="user-menu-dropdown"]').forEach((dd) => {
+			dd.classList.add('hidden');
+		});
+
+		this.ensureUserMenuListeners(rootEl);
+	}
+
+	ensureUserMenuListeners(rootEl) {
+		if (this._userMenuBound) return;
+		this._userMenuBound = true;
+
+		document.addEventListener('click', (evt) => {
+			const container = evt.target.closest('[data-role="user-menu-container"]');
+			const toggleBtn = evt.target.closest('[data-action="toggleUserMenu"]');
+
+			if (toggleBtn && container) {
+				const dropdown = container.querySelector('[data-role="user-menu-dropdown"]');
+				if (dropdown) {
+					dropdown.classList.toggle('hidden');
+				}
+				return;
+			}
+
+			if (!container) {
+				rootEl.querySelectorAll('[data-role="user-menu-dropdown"]').forEach((dd) => {
+					dd.classList.add('hidden');
+				});
+			}
 		});
 	}
 
@@ -179,35 +241,41 @@ class DomUiBinder {
 	}
 
 	/**
-	 * Aggiorna il widget [data-role="db-status-widget"] nella lingua corrente (ENG o ITA).
+	 * Aggiorna il widget [data-role="db-status-widget"] usando i18nService.
 	 */
 	updateDbStatusWidget(rootEl, dbState) {
 		if (!rootEl || !dbState) return;
 		const widgetEl = rootEl.querySelector('[data-role="db-status-widget"]') || rootEl;
-		const lang = dbState.activeLang || dbService.activeLang || 'eng';
-		const isIta = lang === 'ita';
-		const ver = (isIta ? dbState.langVersion : dbState.coreVersion) || dbState.coreVersion || '1.0';
+		const lang = (dbState.activeLang || dbService.activeLang || 'eng').toUpperCase();
+		const ver =
+			(lang === 'ITA' ? dbState.langVersion : dbState.coreVersion) ||
+			dbState.coreVersion ||
+			'1.0';
 
-		const labelMap = isIta
-		                 ? {
-				idle: 'DB in attesa',
-				initializing: 'Inizializzazione SQLite...',
-				downloading: `Download ${dbState.pack || 'DB'} (${dbState.progress ?? 0}%)`,
-				decompressing: `Decompressione ${dbState.pack || 'DB'}...`,
-				ready: `DB Pronto (ITA v${ver})`,
-				error: `Errore DB: ${dbState.error || 'Sconosciuto'}`
+		const fallbackMap = {
+			idle: 'DB idle',
+			initializing: 'Initializing SQLite...',
+			downloading: 'Downloading {pack} ({progress}%)',
+			decompressing: 'Decompressing {pack}...',
+			ready: 'DB Ready ({lang} v{version})',
+			error: 'DB Error: {error}'
+		};
+
+		const statusKey = dbState.status || 'idle';
+		const statusText = i18nService.t(
+			`db.${statusKey}`,
+			fallbackMap[statusKey] || statusKey,
+			{
+				pack: dbState.pack || 'DB',
+				progress: dbState.progress ?? 0,
+				lang,
+				version: ver,
+				error: dbState.error || 'Unknown'
 			}
-		                 : {
-				idle: 'DB idle',
-				initializing: 'Initializing SQLite...',
-				downloading: `Downloading ${dbState.pack || 'DB'} (${dbState.progress ?? 0}%)`,
-				decompressing: `Decompressing ${dbState.pack || 'DB'}...`,
-				ready: `DB Ready (ENG v${ver})`,
-				error: `DB Error: ${dbState.error || 'Unknown'}`
-			};
+		);
 
 		this.bindFields(widgetEl, {
-			dbStatusText: labelMap[dbState.status] || dbState.status,
+			dbStatusText: statusText,
 			dbProgressPct: `${dbState.progress ?? 0}%`
 		});
 
