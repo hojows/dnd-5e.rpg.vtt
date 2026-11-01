@@ -127,69 +127,80 @@
 		</header>
 
 		<!-- Contenitore Principale Scheda (Responsive Grid 12 Colonne su Desktop) -->
+		<!-- Contenitore Principale Scheda (Responsive Grid 12 Colonne su Desktop) -->
 		<main class="max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6" data-role="pc-sheet-root">
 
 			<!-- COLONNA SINISTRA + CENTRALE (Scheda Personaggio: 8 colonne su Desktop) -->
 			<section class="lg:col-span-8 flex flex-col gap-4">
 
-				<!-- Card Anagrafica Personaggio -->
+				<!-- Card Anagrafica Personaggio + Ritratto -->
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
 					<div class="flex flex-wrap items-center justify-between gap-2">
           <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" data-field="campaignBadgeText">
             Modalità Garage
           </span>
-						<div class="flex items-center gap-3 text-xs">
+						<div class="flex flex-wrap items-center gap-3 text-xs">
 							<label class="inline-flex items-center gap-1.5 cursor-pointer text-zinc-300">
 								<input class="rounded bg-zinc-950 border-zinc-700 text-amber-500" data-action="updateBasicField" data-field="inspiration" type="checkbox" />
 								<span>Ispirazione</span>
 							</label>
 							<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
+              CA: <strong class="text-sky-400" data-field="ac">10</strong>
+            </span>
+							<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
               Competenza: <strong class="text-amber-400" data-field="proficiencyBonus">+2</strong>
+            </span>
+							<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+              DV: <strong class="text-zinc-200" data-field="hitDiceSummary">1d8</strong>
             </span>
 						</div>
 					</div>
 
-					<div class="grid grid-cols-1 sm:grid-cols-6 gap-2.5">
-						<div class="sm:col-span-3">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Nome Personaggio</label>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-base font-bold text-white" data-action="updateBasicField" data-field="name" type="text" />
-						</div>
-						<div class="sm:col-span-1">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Livello</label>
-							<input
-								class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-base font-bold text-amber-400 text-center"
-								data-action="updateBasicField"
-								data-enable-if="canLevelUp"
-								data-field="level"
-								max="20"
-								min="1"
-								type="number" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Classi</label>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="classesRaw" type="text" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Razza</label>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="race" type="text" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Background</label>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="background" type="text" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Punti Esperienza</label>
-							<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="experience" type="number" />
+					<div class="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+						<!-- Ritratto PG importato da <imageData> -->
+						<img alt="Ritratto PG" class="hidden w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-amber-500/40 shadow-lg shrink-0" data-field="portraitUrl" data-show-if="hasPortrait" />
+
+						<div class="grid grid-cols-1 sm:grid-cols-6 gap-2.5 flex-1 w-full">
+							<div class="sm:col-span-3">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Nome Personaggio</label>
+								<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-base font-bold text-white" data-action="updateBasicField" data-field="name" type="text" />
+							</div>
+							<div class="sm:col-span-1">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Liv. Tot.</label>
+								<input
+									class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-base font-bold text-amber-400 text-center"
+									data-action="updateBasicField"
+									data-enable-if="canLevelUp"
+									data-field="level"
+									max="20"
+									min="1"
+									type="number" />
+							</div>
+							<div class="sm:col-span-2">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Classi (Multiclasse)</label>
+								<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm font-semibold text-amber-300" data-action="updateBasicField" data-field="classesRaw" type="text" />
+							</div>
+							<div class="sm:col-span-2">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Razza</label>
+								<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="race" type="text" />
+							</div>
+							<div class="sm:col-span-2">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Background</label>
+								<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="background" type="text" />
+							</div>
+							<div class="sm:col-span-2">
+								<label class="block text-[11px] uppercase tracking-wider text-zinc-400">Allineamento</label>
+								<input class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200" data-action="updateBasicField" data-field="alignment" type="text" />
+							</div>
 						</div>
 					</div>
 				</div>
 
-				<!-- Griglia Responsive delle 6 Caratteristiche (2 col mobile, 3 tablet, 6 desktop) -->
+				<!-- Griglia Responsive delle 6 Caratteristiche + Tiri Salvezza -->
 				<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5" data-list="abilities"></div>
 
 				<!-- Barra Punti Ferita & Borsellino Valuta -->
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-					<!-- Punti Ferita -->
 					<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3.5">
 						<h3 class="text-xs font-bold uppercase tracking-wider text-rose-400 mb-2">Punti Ferita (PF)</h3>
 						<div class="grid grid-cols-3 gap-2">
@@ -208,7 +219,6 @@
 						</div>
 					</div>
 
-					<!-- Monete -->
 					<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3.5">
 						<div class="flex items-center justify-between mb-2">
 							<h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Valuta &amp; Tesoro</h3>
@@ -239,19 +249,36 @@
 					</div>
 				</div>
 
+				<!-- Attacchi Rapidi & Risorse / Tracker (<attack> & <tracker>) -->
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+					<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3.5 space-y-2">
+						<h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Attacchi &amp; Armi</h3>
+						<p class="text-xs text-zinc-500" data-empty="attacks">Nessun attacco configurato.</p>
+						<div class="space-y-1.5" data-list="attacks"></div>
+					</div>
+					<div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3.5 space-y-2">
+						<h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Risorse &amp; Tracker</h3>
+						<p class="text-xs text-zinc-500" data-empty="trackers">Nessun contatore attivo.</p>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" data-list="trackers"></div>
+					</div>
+				</div>
+
 				<!-- Barra Navigazione Tab Orizzontale Scorrevole su Mobile -->
 				<nav class="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-zinc-800">
 					<button class="px-3.5 py-2 rounded-t-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-200 whitespace-nowrap" data-action="switchTab" data-tab-target="skills" type="button">
 						Abilità (18)
 					</button>
 					<button class="px-3.5 py-2 rounded-t-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-200 whitespace-nowrap" data-action="switchTab" data-tab-target="spells" type="button">
-						Incantesimi
+						Incantesimi &amp; Infuse
 					</button>
 					<button class="px-3.5 py-2 rounded-t-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-200 whitespace-nowrap" data-action="switchTab" data-tab-target="items" type="button">
-						Inventario
+						Inventario &amp; Zaini
 					</button>
 					<button class="px-3.5 py-2 rounded-t-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-200 whitespace-nowrap" data-action="switchTab" data-tab-target="feats" type="button">
-						Talenti &amp; Privilegi
+						Privilegi &amp; Talenti
+					</button>
+					<button class="px-3.5 py-2 rounded-t-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-semibold text-emerald-300 whitespace-nowrap" data-action="switchTab" data-tab-target="companions" type="button">
+						Compagni (<span data-field="companionsCount">0</span>)
 					</button>
 					<button class="px-3.5 py-2 rounded-t-xl bg-amber-500/10 hover:bg-amber-500/20 text-xs font-semibold text-amber-300 whitespace-nowrap" data-action="switchTab" data-tab-target="shop" type="button">
 						Negozio Campagna
@@ -264,34 +291,44 @@
 					</button>
 				</nav>
 
-				<!-- PANNELLO 1: ABILITÀ (Visibile di default) -->
+				<!-- PANNELLO 1: ABILITÀ -->
 				<div class="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4" data-tab-panel="skills">
 					<h3 class="text-sm font-bold text-zinc-200 mb-3">Prove di Abilità (Clicca per tirare 1d20)</h3>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" data-list="skills"></div>
 				</div>
 
-				<!-- PANNELLO 2: INCANTESIMI -->
+				<!-- PANNELLO 2: INCANTESIMI + SLOT -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="spells">
-					<h3 class="text-sm font-bold text-zinc-200">Libro degli Incantesimi</h3>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<h3 class="text-sm font-bold text-zinc-200">Slot Incantesimo &amp; Libro Magie</h3>
+						<div class="flex flex-wrap gap-2" data-list="spell-slots"></div>
+					</div>
 					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="spells">Nessun incantesimo presente nella scheda.</p>
 					<div class="space-y-2.5" data-list="spells"></div>
 				</div>
 
 				<!-- PANNELLO 3: INVENTARIO ED EQUIPAGGIAMENTO -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="items">
-					<h3 class="text-sm font-bold text-zinc-200">Equipaggiamento e Zaino</h3>
+					<h3 class="text-sm font-bold text-zinc-200">Equipaggiamento e Contenitori</h3>
 					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="items">Zaino vuoto.</p>
 					<div class="space-y-2.5" data-list="items"></div>
 				</div>
 
 				<!-- PANNELLO 4: TALENTI E PRIVILEGI -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="feats">
-					<h3 class="text-sm font-bold text-zinc-200">Talenti e Privilegi di Classe</h3>
+					<h3 class="text-sm font-bold text-zinc-200">Tratti Razziali, Privilegi di Classe e Talenti</h3>
 					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="feats">Nessun talento o privilegio registrato.</p>
 					<div class="space-y-2.5" data-list="feats"></div>
 				</div>
 
-				<!-- PANNELLO 5: NEGOZIO DI CAMPAGNA (DOWNTIME) -->
+				<!-- PANNELLO 5: COMPAGNI / CREATURE (<monster>, es. A.R.G.O.) -->
+				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="companions">
+					<h3 class="text-sm font-bold text-emerald-400">Compagni, Famigli e Costrutti</h3>
+					<p class="text-xs text-zinc-500 py-4 text-center" data-empty="companions">Nessun compagno associato a questa scheda.</p>
+					<div class="space-y-4" data-list="companions"></div>
+				</div>
+
+				<!-- PANNELLO 6: NEGOZIO DI CAMPAGNA -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="shop">
 					<div class="flex items-center justify-between">
 						<h3 class="text-sm font-bold text-amber-400">Negozio Ufficiale della Campagna</h3>
@@ -303,7 +340,7 @@
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3" data-list="campaign-shop"></div>
 				</div>
 
-				<!-- PANNELLO 6: RICERCA COMPENDIO SQLITE -->
+				<!-- PANNELLO 7: RICERCA COMPENDIO SQLITE -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3" data-tab-panel="compendium">
 					<div class="flex flex-col sm:flex-row gap-2">
 						<select class="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200" data-field="compendiumCategory">
@@ -314,25 +351,20 @@
 							<option value="monsters">Mostri / Compagni (monsters)</option>
 							<option value="conditions">Condizioni (conditions)</option>
 						</select>
-						<input
-							class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white"
-							data-action="searchCompendiumInput"
-							data-event="input"
-							placeholder="Cerca in italiano o inglese nel DB SQLite (es. Palla di Fuoco, Fireball)..."
-							type="search" />
+						<input class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white" data-action="searchCompendiumInput" data-event="input" placeholder="Cerca in italiano o inglese nel DB SQLite..." type="search" />
 					</div>
 					<div class="space-y-2 max-h-96 overflow-y-auto pr-1" data-list="compendium-results"></div>
 				</div>
 
-				<!-- PANNELLO 7: DIARIO E NOTE -->
+				<!-- PANNELLO 8: DIARIO E NOTE -->
 				<div class="hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-2" data-tab-panel="notes">
-					<h3 class="text-sm font-bold text-zinc-200">Diario di Sessione e Background (Sempre Modificabile)</h3>
+					<h3 class="text-sm font-bold text-zinc-200">Diario di Sessione, Background e Linguaggi</h3>
 					<textarea
 						class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 leading-relaxed"
 						data-action="updateBasicField"
 						data-field="notes"
 						placeholder="Annota indizi, PNG incontrati, appunti di downtime..."
-						rows="10"></textarea>
+						rows="14"></textarea>
 				</div>
 
 			</section>
@@ -349,7 +381,6 @@
 						</div>
 					</div>
 
-					<!-- Pulsanti Dadi Rapidi -->
 					<div class="grid grid-cols-4 sm:grid-cols-7 lg:grid-cols-4 gap-1.5">
 						<button class="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold" data-action="quickRollDie" data-die="1d4" type="button">d4</button>
 						<button class="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold" data-action="quickRollDie" data-die="1d6" type="button">d6</button>
@@ -360,15 +391,13 @@
 						<button class="py-2 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold" data-action="quickRollDie" data-die="1d100" type="button">d100</button>
 					</div>
 
-					<!-- Formula Custom -->
 					<div class="flex gap-1.5">
-						<input class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200" data-field="customDiceFormula" placeholder="Es. 2d6 + @STR_MOD + @PB" type="text" />
+						<input class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200" data-field="customDiceFormula" placeholder="Es. 2d6 + @INT_MOD + @PB" type="text" />
 						<button class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold" data-action="rollCustomFormula" type="button">
 							Tira
 						</button>
 					</div>
 
-					<!-- Registro Tiri Condiviso -->
 					<div class="border-t border-zinc-800 pt-3">
 						<h4 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Registro Tiri Party (P2P)</h4>
 						<div class="space-y-2 max-h-80 overflow-y-auto pr-1" data-list="dice-log"></div>
@@ -378,16 +407,58 @@
 		</main>
 
 		<!-- ===================================================================== -->
-		<!-- DEFINIZIONE DEI TAG <template> NATIVI CLONATI DA js/ui-binder.js      -->
+		<!-- TAG <template> AGGIORNATI                                             -->
 		<!-- ===================================================================== -->
 
 		<template id="tpl-ability-card">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 flex flex-col items-center justify-between text-center">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 flex flex-col items-center justify-between text-center gap-1">
 				<span class="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold" data-field="abilityLabel">Forza</span>
-				<button class="my-1 px-3 py-1 rounded-lg bg-zinc-950 hover:bg-amber-500/20 border border-zinc-800 hover:border-amber-500/40 text-lg font-extrabold text-amber-400 transition" data-action="rollAbilityCheck" type="button">
+				<button class="px-3 py-0.5 rounded-lg bg-zinc-950 hover:bg-amber-500/20 border border-zinc-800 hover:border-amber-500/40 text-lg font-extrabold text-amber-400 transition" data-action="rollAbilityCheck" type="button">
 					<span data-field="modifier">+0</span>
 				</button>
-				<input class="w-16 bg-zinc-950 border border-zinc-800 rounded-md py-0.5 text-center text-xs font-bold text-zinc-200" data-action="updateAbilityScore" data-enable-if="canEditAbilities" data-field="score" max="30" min="1" type="number" />
+				<input class="w-14 bg-zinc-950 border border-zinc-800 rounded-md py-0.5 text-center text-xs font-bold text-zinc-200" data-action="updateAbilityScore" data-enable-if="canEditAbilities" data-field="score" max="30" min="1" type="number" />
+				<button class="text-[10px] px-2 py-0.5 rounded bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border border-zinc-800" data-action="rollSavingThrow" data-field="saveBonus" type="button">
+					TS +0
+				</button>
+			</div>
+		</template>
+
+		<template id="tpl-attack-row">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 flex items-center justify-between gap-2 text-xs">
+				<div>
+					<span class="font-bold text-white" data-field="name">Attacco</span>
+					<span class="text-[10px] text-zinc-500 ml-1" data-field="type">Mischia</span>
+				</div>
+				<div class="flex items-center gap-1.5">
+					<button class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 font-bold" data-action="rollAttackHit" type="button">
+						Colpire <span data-field="hitBonus">+0</span>
+					</button>
+					<button class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-semibold" data-action="rollAttackDamage" data-field="damageText" type="button">
+						1d8
+					</button>
+				</div>
+			</div>
+		</template>
+
+		<template id="tpl-tracker-card">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-2.5 flex items-center justify-between gap-2 text-xs">
+				<div>
+					<div class="font-bold text-zinc-200" data-field="label">Risorsa</div>
+					<div class="text-[10px] text-zinc-500"><span data-field="origin"></span> &bull; <span data-field="resetLabel"></span></div>
+				</div>
+				<div class="flex items-center gap-1">
+					<input class="w-12 bg-zinc-900 border border-zinc-700 rounded px-1 py-0.5 text-center font-bold text-indigo-300" data-action="updateTrackerValue" data-field="current" type="number" />
+					<span class="text-zinc-500">/</span>
+					<span class="font-bold text-zinc-400" data-field="max">0</span>
+				</div>
+			</div>
+		</template>
+
+		<template id="tpl-spell-slot-badge">
+			<div class="rounded-lg border border-indigo-500/30 bg-indigo-950/30 px-2.5 py-1 flex items-center gap-1.5 text-xs">
+				<span class="font-semibold text-indigo-300" data-field="slotTitle">Liv. 1</span>
+				<input class="w-10 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-center font-bold text-white" data-action="updateSpellSlotCurrent" data-field="current" min="0" type="number" />
+				<span class="text-zinc-400">/ <span data-field="max">0</span></span>
 			</div>
 		</template>
 
@@ -405,13 +476,19 @@
 		<template id="tpl-spell-row">
 			<div class="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 space-y-1.5">
 				<div class="flex flex-wrap items-center justify-between gap-2">
-					<div class="flex items-center gap-2">
-						<input class="rounded bg-zinc-900 border-zinc-700 text-amber-500" data-action="toggleSpellPrepared" data-field="prepared" title="Incantesimo Preparato" type="checkbox" />
+					<div class="flex flex-wrap items-center gap-2">
+						<input class="rounded bg-zinc-900 border-zinc-700 text-amber-500" data-action="toggleSpellPrepared" data-field="prepared" title="Preparato" type="checkbox" />
 						<span class="font-bold text-sm text-white" data-field="name">Nome Incantesimo</span>
 						<span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[11px] font-semibold" data-field="levelLabel">Liv. 1</span>
-						<span class="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px]" data-field="sourceBadge">PHB</span>
+						<span class="px-2 py-0.5 rounded bg-zinc-800 text-amber-300 text-[10px]" data-field="originBadge"></span>
+						<span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-500 text-[10px]" data-field="sourceBadge">PHB</span>
 					</div>
-					<button class="text-xs text-rose-400 hover:underline" data-action="removeListItem" data-list-type="spells" type="button">Rimuovi</button>
+					<div class="flex items-center gap-2">
+						<button class="hidden px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold" data-action="rollSpellEffect" data-show-if="hasSpellRoll" type="button">
+							🎲 <span data-field="rollFormula"></span>
+						</button>
+						<button class="text-xs text-rose-400 hover:underline" data-action="removeListItem" data-list-type="spells" type="button">Rimuovi</button>
+					</div>
 				</div>
 				<div class="flex flex-wrap gap-3 text-[11px] text-zinc-400">
 					<span>Tempo: <strong class="text-zinc-300" data-field="castingTime">-</strong></span>
@@ -423,12 +500,14 @@
 		</template>
 
 		<template id="tpl-item-row">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
+			<div class="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 space-y-1.5">
 				<div class="flex flex-wrap items-center justify-between gap-2">
-					<div class="flex items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2">
+						<img alt="Oggetto" class="hidden w-10 h-10 rounded-lg object-cover border border-zinc-700" data-field="itemImgUrl" data-show-if="hasItemImage" />
 						<input class="rounded bg-zinc-900 border-zinc-700 text-amber-500" data-action="toggleItemEquipped" data-field="equipped" title="Equipaggiato" type="checkbox" />
 						<span class="font-bold text-sm text-white" data-field="name">Oggetto</span>
 						<span class="text-xs text-amber-400">x<span data-field="count">1</span></span>
+						<span class="px-2 py-0.5 rounded bg-zinc-800 text-sky-300 text-[10px]" data-field="containerBadge">Zaino</span>
 						<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px]" data-field="rarity">Comune</span>
 						<span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-500 text-[10px]" data-field="sourceBadge">PHB</span>
 					</div>
@@ -445,8 +524,9 @@
 		<template id="tpl-feat-row">
 			<div class="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
 				<div class="flex items-center justify-between gap-2">
-					<div class="flex items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2">
 						<span class="font-bold text-sm text-white" data-field="name">Talento</span>
+						<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px] font-semibold" data-field="originBadge"></span>
 						<span class="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px]" data-field="sourceBadge">PHB</span>
 					</div>
 					<button class="text-xs text-rose-400 hover:underline" data-action="removeListItem" data-list-type="feats" type="button">Rimuovi</button>
@@ -456,52 +536,37 @@
 			</div>
 		</template>
 
-		<template id="tpl-shop-item-row">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-3.5 flex flex-col justify-between gap-2">
-				<div>
-					<div class="flex items-start justify-between gap-2">
-						<span class="font-bold text-sm text-white" data-field="name">Oggetto in Vendita</span>
-						<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-bold whitespace-nowrap" data-field="priceLabel">0 mo</span>
+		<template id="tpl-companion-card">
+			<div class="rounded-2xl border border-emerald-500/30 bg-zinc-950/80 p-4 space-y-3">
+				<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+					<div class="flex items-center gap-3">
+						<img alt="Compagno" class="hidden w-16 h-16 rounded-xl object-cover border border-emerald-500/40" data-field="companionImgUrl" data-show-if="hasCompanionImage" />
+						<div>
+							<div class="flex items-center gap-2">
+								<h4 class="text-base font-extrabold text-emerald-400" data-field="label">A.R.G.O.</h4>
+								<span class="text-xs text-zinc-400">(<span data-field="name">Homunculus</span>)</span>
+							</div>
+							<p class="text-xs text-zinc-400" data-field="typeAndSize"></p>
+							<p class="text-xs text-zinc-300 mt-0.5">CA: <strong class="text-sky-400" data-field="ac">13</strong> &bull; Velocità: <strong data-field="speed"></strong></p>
+						</div>
 					</div>
-					<span class="block text-[11px] text-zinc-400 mt-0.5" data-field="stockLabel">Disponibili: 1</span>
-					<p class="text-xs text-zinc-400 mt-2 line-clamp-3" data-field="description"></p>
-				</div>
-				<button class="w-full py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold" data-action="buyShopItem" type="button">
-					Acquista (Scala Oro)
-				</button>
-			</div>
-		</template>
-
-		<template id="tpl-compendium-result-row">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 flex items-center justify-between gap-2">
-				<div>
-					<div class="flex items-center gap-2">
-						<span class="font-bold text-xs text-white" data-field="name">Voce</span>
-						<span class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-amber-400 uppercase" data-field="category">spells</span>
-						<span class="text-[10px] text-zinc-500" data-field="source">PHB</span>
+					<div class="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl text-xs">
+						<span class="text-rose-400 font-bold">PF:</span>
+						<input class="w-14 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-0.5 text-center font-extrabold text-emerald-400" data-action="updateCompanionHp" data-field="hpCurrent" type="number" />
+						<span class="text-zinc-400">/ <strong data-field="hpMax">10</strong></span>
 					</div>
-					<p class="text-[11px] text-zinc-400" data-field="details"></p>
 				</div>
-				<button class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold whitespace-nowrap" data-action="addCompendiumEntryToCharacter" type="button">
-					+ Aggiungi
-				</button>
-			</div>
-		</template>
-
-		<template id="tpl-dice-log-row">
-			<div class="rounded-xl border border-zinc-800 bg-zinc-950/90 p-2.5 text-xs flex items-center justify-between gap-2">
-				<div>
-					<div class="flex items-center gap-1.5">
-						<strong class="text-amber-400" data-field="rollerName">Giocatore</strong>
-						<span class="text-zinc-500">&bull;</span>
-						<span class="text-[10px] text-zinc-500" data-field="time">00:00</span>
-						<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold" data-field="advantageBadge" data-show-if="hasAdvantageBadge"></span>
-					</div>
-					<div class="text-zinc-300 font-medium" data-field="rollLabel">Lancio</div>
-					<div class="text-[11px] text-zinc-500"><span data-field="notation">1d20</span> &rarr; <span data-field="rollsBreakdown">[10]</span></div>
+				<div class="text-xs font-mono text-amber-300 bg-zinc-900/90 px-3 py-1.5 rounded-lg" data-field="abilitiesLine"></div>
+				<div class="text-xs text-zinc-300 space-y-1">
+					<div><strong>TS &amp; Abilità:</strong> <span data-field="skillsAndSaves"></span></div>
+					<div><strong>Immunità:</strong> <span data-field="immunities"></span></div>
+					<div><strong>Sensi:</strong> <span data-field="senses"></span></div>
 				</div>
-				<div class="text-xl font-black text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800" data-field="total">
-					20
+				<p class="text-xs text-zinc-400 italic whitespace-pre-line" data-field="text"></p>
+				<div class="space-y-1.5 text-xs text-zinc-200">
+					<p class="whitespace-pre-line" data-field="traitsText"></p>
+					<p class="whitespace-pre-line text-amber-200" data-field="actionsText"></p>
+					<p class="whitespace-pre-line text-sky-200" data-field="reactionsText"></p>
 				</div>
 			</div>
 		</template>

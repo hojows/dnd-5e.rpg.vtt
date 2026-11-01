@@ -6,6 +6,7 @@ const SESSION_STORAGE_KEY = 'dnd5e_google_oauth_session_v2';
 const LAST_EMAIL_STORAGE_KEY = 'dnd5e_google_last_email';
 const ACTIVE_PC_CACHE_KEY = 'dnd5e_active_pc_working_copy';
 const ACTIVE_CAMP_CACHE_KEY = 'dnd5e_active_campaign_working_copy';
+const ACTIVE_IMAGES_IDB = 'DND5E_Active_Images_Cache';
 
 class DriveStorageService {
 	constructor() {
@@ -17,16 +18,83 @@ class DriveStorageService {
 		this.pickerApiLoaded = false;
 		this.gisLoaded = false;
 		this.authListeners = new Set();
+		this.activeImagesMemory = {}; // uid -> base64 string (solo per il PG attivo)
 
 		this.restoreSessionFromStorage();
 	}
 
 	// =========================================================================
-	// 1. CACHE LOCALE SOLO PER IL SINGOLO PG / CAMPAGNA ATTIVA
+	// 1. STORE SEPARATO PER LE IMMAGINI DEL SOLO PG ATTIVO
+	// =========================================================================
+
+	openImagesIdb() {
+		return new Promise((resolve, reject) => {
+			const req = indexedDB.open(ACTIVE_IMAGES_IDB, 1);
+			req.onupgradeneeded = (e) => {
+				const db = e.target.result;
+				if (!db.objectStoreNames.contains('images')) {
+					db.createObjectStore('images');
+				}
+			};
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => reject(req.error);
+		});
+	}
+
+	async saveActiveImagesMap(imagesMap) {
+		this.activeImagesMemory = {...(imagesMap || {})};
+		try {
+			const db = await this.openImagesIdb();
+			await new Promise((resolve, reject) => {
+				const tx = db.transaction('images', 'readwrite');
+				const store = tx.objectStore('images');
+				store.clear();
+				store.put(this.activeImagesMemory, 'active_pc_images');
+				tx.oncomplete = () => resolve();
+				tx.onerror = () => reject(tx.error);
+			});
+		} catch (e) {
+			console.warn('Impossibile salvare la cache immagini attiva:', e);
+		}
+	}
+
+	async loadActiveImagesMap() {
+		if (Object.keys(this.activeImagesMemory).length > 0) {
+			return this.activeImagesMemory;
+		}
+		try {
+			const db = await this.openImagesIdb();
+			const map = await new Promise((resolve, reject) => {
+				const tx = db.transaction('images', 'readonly');
+				const req = tx.objectStore('images').get('active_pc_images');
+				req.onsuccess = () => resolve(req.result || {});
+				req.onerror = () => reject(req.error);
+			});
+			this.activeImagesMemory = map;
+			return map;
+		} catch (_) {
+			return {};
+		}
+	}
+
+	getImageDataUrl(uid) {
+		if (!uid || !this.activeImagesMemory[uid]) return null;
+		const raw = this.activeImagesMemory[uid];
+		if (raw.startsWith('data:image')) return raw;
+		return `data:image/jpeg;base64,${raw}`;
+	}
+
+	// =========================================================================
+	// 2. CACHE LOCALE SOLO PER IL SINGOLO PG / CAMPAGNA ATTIVA (SENZA BASE64)
 	// =========================================================================
 
 	saveActiveCharacterWorkingCopy(character, isDirty = true) {
 		if (!character) return;
+		if (character._pendingImages && Object.keys(character._pendingImages).length > 0) {
+			const merged = {...this.activeImagesMemory, ...character._pendingImages};
+			delete character._pendingImages;
+			this.saveActiveImagesMap(merged);
+		}
 		character._dirty = isDirty;
 		character.updatedAt = Date.now();
 		try {
@@ -43,10 +111,6 @@ class DriveStorageService {
 		} catch (_) {
 			return null;
 		}
-	}
-
-	clearActiveCharacterWorkingCopy() {
-		localStorage.removeItem(ACTIVE_PC_CACHE_KEY);
 	}
 
 	saveActiveCampaignWorkingCopy(campaign, isDirty = true) {
@@ -70,7 +134,7 @@ class DriveStorageService {
 	}
 
 	// =========================================================================
-	// 2. GESTIONE SESSIONE GOOGLE OAUTH 2.0 (SENZA REVOCA PERMESSI)
+	// 3. AUTENTICAZIONE GOOGLE OAUTH 2.0
 	// =========================================================================
 
 	restoreSessionFromStorage() {
@@ -194,16 +258,10 @@ class DriveStorageService {
 			}
 
 			this.tokenClient = window.google.accounts.oauth2.initTokenClient(clientConfig);
-
-			// prompt: "" evita di riproporre la schermata dei permessi se già concessi
 			this.tokenClient.requestAccessToken({prompt: ''});
 		});
 	}
 
-	/**
-	 * Disconnette la sessione locale nel browser SENZA revocare i permessi OAuth su Google,
-	 * così al login successivo non viene riproposta la schermata di approvazione permessi.
-	 */
 	signOut() {
 		this.accessToken = null;
 		this.userProfile = null;
@@ -227,7 +285,7 @@ class DriveStorageService {
 	}
 
 	// =========================================================================
-	// 3. OPERAZIONI SU GOOGLE DRIVE API V3
+	// 4. OPERAZIONI SU GOOGLE DRIVE API V3 (JSON + IMMAGINI SEPARATE)
 	// =========================================================================
 
 	async driveRequest(url, options = {}) {
@@ -296,6 +354,63 @@ class DriveStorageService {
 		);
 	}
 
+	/**
+	 * Carica un'immagine Base64 su Google Drive come file binario JPEG separato
+	 * (Content-Transfer-Encoding: base64), restituendo il relativo driveFileId.
+	 */
+	async saveImageFileToDrive(fileName, base64Data, existingDriveFileId = null) {
+		const folderId = await this.ensureVaultFolder();
+		const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '').replace(/\s+/g, '');
+		const metadata = existingDriveFileId
+		                 ? {name: fileName, mimeType: 'image/jpeg'}
+		                 : {name: fileName, mimeType: 'image/jpeg', parents: [folderId]};
+
+		const boundary = '-------dnd5e_vtt_img_boundary';
+		const delimiter = `\r\n--${boundary}\r\n`;
+		const closeDelimiter = `\r\n--${boundary}--`;
+
+		const multipartBody =
+			delimiter +
+			'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+			JSON.stringify(metadata) +
+			delimiter +
+			'Content-Type: image/jpeg\r\n' +
+			'Content-Transfer-Encoding: base64\r\n\r\n' +
+			cleanBase64 +
+			closeDelimiter;
+
+		const url = existingDriveFileId
+		            ? `https://www.googleapis.com/upload/drive/v3/files/${existingDriveFileId}?uploadType=multipart&fields=id,name`
+		            : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name`;
+
+		return this.driveRequest(url, {
+			method: existingDriveFileId ? 'PATCH' : 'POST',
+			headers: {'Content-Type': `multipart/related; boundary=${boundary}`},
+			body: multipartBody
+		});
+	}
+
+	/**
+	 * Scarica un file immagine separato da Google Drive e lo converte in stringa Base64.
+	 */
+	async readImageBase64FromDrive(driveFileId) {
+		if (!this.accessToken || !driveFileId) return null;
+		const response = await fetch(
+			`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
+			{headers: {Authorization: `Bearer ${this.accessToken}`}}
+		);
+		if (!response.ok) return null;
+		const blob = await response.blob();
+		return new Promise((resolve) => {
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				const res = String(reader.result || '');
+				resolve(res.replace(/^data:image\/\w+;base64,/, ''));
+			};
+			reader.readAsDataURL(blob);
+		});
+	}
+
 	async saveJsonFileToDrive(fileName, jsonData, existingDriveFileId = null) {
 		const folderId = await this.ensureVaultFolder();
 		const metadata = existingDriveFileId
@@ -308,6 +423,7 @@ class DriveStorageService {
 
 		const cleanData = {...jsonData};
 		delete cleanData._dirty;
+		delete cleanData._pendingImages;
 
 		const multipartBody =
 			delimiter +
@@ -384,7 +500,7 @@ class DriveStorageService {
 	}
 
 	// =========================================================================
-	// 4. CARICAMENTO E SALVATAGGIO CLOUD PER GIOCATORE E MASTER
+	// 5. CARICAMENTO E SALVATAGGIO PG (CON IMMAGINI SEPARATE SU DRIVE)
 	// =========================================================================
 
 	async listCharactersOnDrive() {
@@ -395,6 +511,20 @@ class DriveStorageService {
 	async loadCharacterFromDrive(driveFileId) {
 		const ch = await this.readJsonFileFromDrive(driveFileId);
 		ch.driveFileId = driveFileId;
+
+		// Scarica le immagini separate collegate al PG (se presenti in imageDriveMap)
+		const imgMap = {};
+		if (ch.imageDriveMap && typeof ch.imageDriveMap === 'object') {
+			await Promise.all(
+				Object.entries(ch.imageDriveMap).map(async ([uid, imgFileId]) => {
+					try {
+						const b64 = await this.readImageBase64FromDrive(imgFileId);
+						if (b64) imgMap[uid] = b64;
+					} catch (_) {}
+				})
+			);
+		}
+		await this.saveActiveImagesMap(imgMap);
 		this.saveActiveCharacterWorkingCopy(ch, false);
 		return ch;
 	}
@@ -410,6 +540,21 @@ class DriveStorageService {
 			throw new Error('Effettua prima il Login a Google Drive.');
 		}
 
+		// 1. Salva ogni immagine in cache come file .jpg separato su Google Drive
+		const imagesMap = await this.loadActiveImagesMap();
+		character.imageDriveMap = character.imageDriveMap || {};
+
+		for (const [uid, base64Str] of Object.entries(imagesMap)) {
+			if (!base64Str) continue;
+			const existingImgDriveId = character.imageDriveMap[uid] || null;
+			const imgFileName = `IMG_${character.localId}_${uid}.jpg`;
+			const imgMeta = await this.saveImageFileToDrive(imgFileName, base64Str, existingImgDriveId);
+			if (imgMeta && imgMeta.id) {
+				character.imageDriveMap[uid] = imgMeta.id;
+			}
+		}
+
+		// 2. Salva il file JSON leggero del personaggio (privo di stringhe Base64)
 		const safeName = (character.name || 'PG').replace(/[^a-zA-Z0-9_-]/g, '_');
 		const fileName = `PG_${safeName}_${character.localId}.json`;
 		const meta = await this.saveJsonFileToDrive(fileName, character, character.driveFileId);

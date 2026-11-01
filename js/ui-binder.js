@@ -1,7 +1,8 @@
 // js/ui-binder.js
 import {CORE_ABILITIES, CORE_SKILLS} from './config.js';
 import {dbService} from './db-service.js';
-import {getAbilityModifier} from './formula-engine.js';
+import {driveService} from './drive-service.js';
+import {evaluateFormula, getAbilityModifier} from './formula-engine.js';
 import {rulesGuard} from './rules-guard.js';
 
 class DomUiBinder {
@@ -27,7 +28,14 @@ class DomUiBinder {
 			const val = this.resolvePath(data, fieldPath);
 			if (val === undefined) return;
 
-			if (el instanceof HTMLInputElement) {
+			if (el instanceof HTMLImageElement) {
+				if (val) {
+					el.src = val;
+					el.classList.remove('hidden');
+				} else {
+					el.classList.add('hidden');
+				}
+			} else if (el instanceof HTMLInputElement) {
 				if (el.type === 'checkbox') {
 					el.checked = Boolean(val);
 				} else if (document.activeElement !== el) {
@@ -80,10 +88,6 @@ class DomUiBinder {
 		});
 	}
 
-	/**
-	 * Registra i listener [data-action] in modo idempotente: se un elemento viene
-	 * ri-associato durante il re-render della scheda, sostituisce il vecchio listener senza duplicarlo.
-	 */
 	bindActions(rootEl, handlers, contextItem = null) {
 		if (!rootEl || !handlers) return;
 
@@ -222,17 +226,33 @@ class DomUiBinder {
 	async renderCharacterSheet(rootEl, character, campaignManifest, actionHandlers = {}) {
 		if (!rootEl || !character) return;
 
+		await driveService.loadActiveImagesMap();
+		const portraitUrl = driveService.getImageDataUrl(character.imageUid);
+
 		const lang = dbService.activeLang || 'ita';
 		const perms = rulesGuard.getPermissions(character, campaignManifest);
 		const level = Number(character.level) || 1;
 		const proficiencyBonus = Math.ceil(level / 4) + 1;
 		const customRegistry = campaignManifest?.customCompendium || null;
 
-		// 1. Popola i campi statici e collega subito i relativi listener (es. updateBasicField per PF, oro, livello, note)
+		const charContext = {
+			level,
+			proficiencyBonus,
+			abilities: character.abilities,
+			spellcastingAbility: character.spellcastingAbility || 'int'
+		};
+
+		const hitDiceSummary = Array.isArray(character.classes) && character.classes.length > 0
+		                       ? character.classes.map((c) => `${c.name}: ${c.hdCurrent ?? c.level}/${c.level}d${c.hdFaces || 8}`).join(' • ')
+		                       : `${level}d8`;
+
 		this.bindFields(rootEl, {
 			name: character.name || 'Senza Nome',
+			portraitUrl: portraitUrl || '',
 			level,
 			proficiencyBonus: `+${proficiencyBonus}`,
+			ac: character.ac ?? 10 + getAbilityModifier(character.abilities?.dex ?? 10),
+			hitDiceSummary,
 			race: character.race || '-',
 			classesRaw: character.classesRaw || '-',
 			background: character.background || '-',
@@ -252,34 +272,102 @@ class DomUiBinder {
 				cp: character.money?.cp ?? 0
 			},
 			notes: character.notes || '',
+			companionsCount: Array.isArray(character.companions) ? character.companions.length : 0,
 			campaignBadgeText: perms.isCampaignBound
 			                   ? `Campagna: ${campaignManifest?.campaignName || 'Associata'} (Max Liv. ${perms.maxAllowedLevel})`
 			                   : 'Modalità Garage (Modifica Libera)'
 		});
 
-		this.bindVisibility(rootEl, perms);
+		this.bindVisibility(rootEl, {
+			...perms,
+			hasPortrait: Boolean(portraitUrl)
+		});
 		this.bindEnabled(rootEl, perms);
 		this.bindActions(rootEl, actionHandlers);
 
-		// 2. Griglia delle 6 Caratteristiche
+		// 2. Griglia delle 6 Caratteristiche + Tiri Salvezza
 		const abilitiesContainer = rootEl.querySelector('[data-list="abilities"]');
+		const saveProfs = new Set(character.savingThrowProficiencies || []);
+
 		this.renderList(abilitiesContainer, 'tpl-ability-card', CORE_ABILITIES, (node, ab) => {
 			const score = Number(character.abilities?.[ab.key] ?? 10);
 			const mod = getAbilityModifier(score);
 			const modFormatted = mod >= 0 ? `+${mod}` : `${mod}`;
+			const hasSaveProf = saveProfs.has(ab.key);
+			const saveBonus = mod + (hasSaveProf ? proficiencyBonus : 0);
+			const saveFormatted = saveBonus >= 0 ? `+${saveBonus}` : `${saveBonus}`;
 
 			this.bindFields(node, {
 				abilityKey: ab.key.toUpperCase(),
 				abilityLabel: lang === 'ita' ? ab.full_ita : ab.full_eng,
 				score,
-				modifier: modFormatted
+				modifier: modFormatted,
+				saveBonus: `TS ${saveFormatted}`
 			});
 
 			this.bindEnabled(node, perms);
-			this.bindActions(node, actionHandlers, {abilityKey: ab.key, label: ab.full_ita, mod});
+			this.bindActions(node, actionHandlers, {
+				abilityKey: ab.key,
+				label: ab.full_ita,
+				mod,
+				saveBonus
+			});
 		});
 
-		// 3. Lista delle 18 Abilità
+		// 3. Attacchi (<attack>) e Tracker / Risorse (<tracker>)
+		const attacksContainer = rootEl.querySelector('[data-list="attacks"]');
+		if (attacksContainer && document.getElementById('tpl-attack-row')) {
+			this.renderList(
+				attacksContainer,
+				'tpl-attack-row',
+				character.attacks || [],
+				(node, atk) => {
+					const hitEval = evaluateFormula(atk.attackBonusFormula, charContext);
+					let hitNum = 0;
+					try {
+						hitNum = Function(`"use strict"; return (${hitEval.expression})`)();
+					} catch (_) {}
+					const hitFormatted = hitNum >= 0 ? `+${hitNum}` : `${hitNum}`;
+					const dmgEval = evaluateFormula(atk.damageFormula, charContext);
+
+					this.bindFields(node, {
+						name: atk.name,
+						type: atk.type || 'Mischia',
+						hitBonus: hitFormatted,
+						damageText: `${dmgEval.expression} ${atk.damageType || ''}`.trim()
+					});
+
+					this.bindActions(node, actionHandlers, {
+						name: atk.name,
+						hitBonus: hitNum,
+						damageFormula: dmgEval.expression
+					});
+				},
+				rootEl.querySelector('[data-empty="attacks"]')
+			);
+		}
+
+		const trackersContainer = rootEl.querySelector('[data-list="trackers"]');
+		if (trackersContainer && document.getElementById('tpl-tracker-card')) {
+			this.renderList(
+				trackersContainer,
+				'tpl-tracker-card',
+				character.trackers || [],
+				(node, tr, idx) => {
+					this.bindFields(node, {
+						label: tr.label,
+						origin: tr.origin || '',
+						resetLabel: tr.resetLabel || 'Riposo Lungo',
+						current: tr.current ?? 0,
+						max: tr.max ?? 0
+					});
+					this.bindActions(node, actionHandlers, {index: idx, tracker: tr});
+				},
+				rootEl.querySelector('[data-empty="trackers"]')
+			);
+		}
+
+		// 4. Lista delle 18 Abilità
 		const skillsContainer = rootEl.querySelector('[data-list="skills"]');
 		const profSkillsStr = (character.skills || '').toLowerCase();
 
@@ -305,7 +393,19 @@ class DomUiBinder {
 			});
 		});
 
-		// 4. Lista Incantesimi
+		// 5. Slot Incantesimo e Lista Incantesimi
+		const slotsContainer = rootEl.querySelector('[data-list="spell-slots"]');
+		if (slotsContainer && document.getElementById('tpl-spell-slot-badge')) {
+			this.renderList(slotsContainer, 'tpl-spell-slot-badge', character.spellSlots || [], (node, sl, idx) => {
+				this.bindFields(node, {
+					slotTitle: `${sl.type === 'Standard' ? `Liv. ${sl.level}` : `Liv. ${sl.level} (${sl.type})`}`,
+					current: sl.current ?? sl.max,
+					max: sl.max
+				});
+				this.bindActions(node, actionHandlers, {index: idx, slot: sl});
+			});
+		}
+
 		const spellsContainer = rootEl.querySelector('[data-list="spells"]');
 		const hydratedSpells = await Promise.all(
 			(character.spells || []).map((sp) => dbService.hydrateEntry('spells', sp, customRegistry))
@@ -316,29 +416,41 @@ class DomUiBinder {
 			'tpl-spell-row',
 			hydratedSpells,
 			(node, sp, idx) => {
-				const displayName = sp.name || sp.customData?.name || `Incantesimo #${sp.dbId}`;
+				const displayName = sp.customLabel || sp.name || sp.customData?.name || `Incantesimo #${sp.dbId}`;
 				const spellLevel = sp.level ?? sp.customData?.level ?? 0;
 				const school = sp.school || sp.customData?.school || '';
 				const description = sp.description || sp.customData?.text || '';
+				const firstRoll = (sp.rolls || sp.customData?.rolls || [])[0] || '';
 
 				this.bindFields(node, {
 					name: displayName,
 					levelLabel: spellLevel === 0 ? 'Trucchetto' : `Liv. ${spellLevel}`,
+					originBadge: sp.origin || sp.customData?.origin || '',
 					school,
-					castingTime: sp.casting_time || '-',
-					range: sp.range_area || '-',
-					duration: sp.duration || '-',
+					castingTime: sp.casting_time || sp.customData?.casting_time || '-',
+					range: sp.range_area || sp.customData?.range_area || '-',
+					duration: sp.duration || sp.customData?.duration || '-',
 					description,
 					prepared: Boolean(sp.prepared),
-					sourceBadge: sp.isCustom ? 'CUSTOM' : sp.source || 'PHB'
+					rollFormula: firstRoll,
+					sourceBadge: sp.isCustom ? 'XML/CUSTOM' : sp.source || 'PHB'
 				});
 
-				this.bindActions(node, actionHandlers, {index: idx, entry: sp, name: displayName});
+				this.bindVisibility(node, {
+					hasSpellRoll: Boolean(firstRoll)
+				});
+
+				this.bindActions(node, actionHandlers, {
+					index: idx,
+					entry: sp,
+					name: displayName,
+					rollFormula: firstRoll
+				});
 			},
 			rootEl.querySelector('[data-empty="spells"]')
 		);
 
-		// 5. Lista Oggetti ed Equipaggiamento
+		// 6. Lista Oggetti ed Equipaggiamento
 		const itemsContainer = rootEl.querySelector('[data-list="items"]');
 		const hydratedItems = await Promise.all(
 			(character.items || []).map((it) => dbService.hydrateEntry('items', it, customRegistry))
@@ -349,18 +461,25 @@ class DomUiBinder {
 			'tpl-item-row',
 			hydratedItems,
 			(node, it, idx) => {
-				const displayName = it.name || it.customData?.name || `Oggetto #${it.dbId}`;
+				const displayName = it.customLabel || it.name || it.customData?.name || `Oggetto #${it.dbId}`;
 				const description = it.description || it.customData?.text || '';
+				const itemImgUrl = driveService.getImageDataUrl(it.imageUid || it.customData?.imageUid);
 
 				this.bindFields(node, {
 					name: displayName,
+					itemImgUrl: itemImgUrl || '',
+					containerBadge: it.container || it.customData?.container || 'Zaino',
 					count: it.count ?? 1,
 					equipped: Boolean(it.equipped),
-					rarity: it.rarity || 'Comune',
-					damage: it.damage || '',
-					ac: it.ac ? `CA ${it.ac}` : '',
+					rarity: it.rarity || it.customData?.detail || 'Comune',
+					damage: it.damage || it.customData?.damage || '',
+					ac: (it.ac || it.customData?.ac) > 0 ? `CA +${it.ac || it.customData?.ac}` : '',
 					description,
-					sourceBadge: it.isCustom ? 'CUSTOM' : it.source || 'PHB'
+					sourceBadge: it.isCustom ? 'XML/CUSTOM' : it.source || 'PHB'
+				});
+
+				this.bindVisibility(node, {
+					hasItemImage: Boolean(itemImgUrl)
 				});
 
 				this.bindActions(node, actionHandlers, {index: idx, entry: it, name: displayName});
@@ -368,7 +487,7 @@ class DomUiBinder {
 			rootEl.querySelector('[data-empty="items"]')
 		);
 
-		// 6. Lista Talenti e Privilegi
+		// 7. Lista Talenti e Privilegi (Razza, Classe, Background, Talenti)
 		const featsContainer = rootEl.querySelector('[data-list="feats"]');
 		const hydratedFeats = await Promise.all(
 			(character.feats || []).map((ft) => dbService.hydrateEntry('feats', ft, customRegistry))
@@ -379,20 +498,76 @@ class DomUiBinder {
 			'tpl-feat-row',
 			hydratedFeats,
 			(node, ft, idx) => {
-				const displayName = ft.name || ft.customData?.name || `Talento #${ft.dbId}`;
+				const displayName = ft.customLabel || ft.name || ft.customData?.name || `Talento #${ft.dbId}`;
 				const description = ft.description || ft.customData?.text || '';
 
 				this.bindFields(node, {
 					name: displayName,
-					prerequisite: ft.prerequisite || '',
+					originBadge: ft.origin || ft.customData?.origin || '',
+					prerequisite: ft.prerequisite || ft.customData?.prerequisite || '',
 					description,
-					sourceBadge: ft.isCustom ? 'CUSTOM' : ft.source || 'PHB'
+					sourceBadge: ft.isCustom ? 'XML/CUSTOM' : ft.source || 'PHB'
 				});
 
 				this.bindActions(node, actionHandlers, {index: idx, entry: ft, name: displayName});
 			},
 			rootEl.querySelector('[data-empty="feats"]')
 		);
+
+		// 8. Lista Compagni / Creature (<monster>, es. A.R.G.O.)
+		const companionsContainer = rootEl.querySelector('[data-list="companions"]');
+		if (companionsContainer && document.getElementById('tpl-companion-card')) {
+			this.renderList(
+				companionsContainer,
+				'tpl-companion-card',
+				character.companions || [],
+				(node, comp, idx) => {
+					const compImgUrl = driveService.getImageDataUrl(comp.imageUid);
+					const abStr = CORE_ABILITIES.map((a) => {
+						const sc = comp.abilities?.[a.key] ?? 10;
+						const m = getAbilityModifier(sc);
+						return `${a.label_ita}: ${sc} (${m >= 0 ? `+${m}` : m})`;
+					}).join(' | ');
+
+					const traitsText = (comp.traits || []).map((t) => `• ${t.name}: ${t.text}`).join('\n');
+					const actionsText = (comp.actions || [])
+						.map((act) => {
+							const atkDesc = (act.attacks || [])
+								.map((at) => `[+${at.attackBonus} a colpire, ${at.damage}]`)
+								.join(' ');
+							return `• ${act.name} ${atkDesc}: ${act.text}`;
+						})
+						.join('\n');
+					const reactionsText = (comp.reactions || []).map((r) => `• ${r.name}: ${r.text}`).join('\n');
+
+					this.bindFields(node, {
+						label: comp.label || comp.name,
+						name: comp.name,
+						companionImgUrl: compImgUrl || '',
+						typeAndSize: `${comp.size || ''} ${comp.type || ''} (${comp.alignment || ''})`.trim(),
+						ac: comp.ac || '10',
+						speed: comp.speed || '-',
+						hpCurrent: comp.hp?.current ?? 10,
+						hpMax: comp.hp?.max ?? 10,
+						abilitiesLine: abStr,
+						skillsAndSaves: [...(comp.savingThrows || []), ...(comp.skills || [])].join(' • ') || '-',
+						immunities: [comp.immune, comp.conditionImmune].filter(Boolean).join(' | ') || '-',
+						senses: `${comp.senses || ''} (Percezione Passiva ${comp.passivePerception ?? 10})`.trim(),
+						text: comp.text || '',
+						traitsText,
+						actionsText,
+						reactionsText
+					});
+
+					this.bindVisibility(node, {
+						hasCompanionImage: Boolean(compImgUrl)
+					});
+
+					this.bindActions(node, actionHandlers, {index: idx, companion: comp});
+				},
+				rootEl.querySelector('[data-empty="companions"]')
+			);
+		}
 	}
 }
 

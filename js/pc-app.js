@@ -697,10 +697,50 @@ class PlayerAppController {
 				this.executeRoll(`1d20${sign}`, `Prova di ${ctx.label}`);
 			},
 
+			rollSavingThrow: (evt, el, ctx) => {
+				if (!ctx) return;
+				const sign = ctx.saveBonus >= 0 ? `+${ctx.saveBonus}` : `${ctx.saveBonus}`;
+				this.executeRoll(`1d20${sign}`, `TS ${ctx.label}`);
+			},
+
 			rollSkillCheck: (evt, el, ctx) => {
 				if (!ctx) return;
 				const sign = ctx.bonus >= 0 ? `+${ctx.bonus}` : `${ctx.bonus}`;
 				this.executeRoll(`1d20${sign}`, `Abilità: ${ctx.label}`);
+			},
+
+			rollAttackHit: (evt, el, ctx) => {
+				if (!ctx) return;
+				const sign = ctx.hitBonus >= 0 ? `+${ctx.hitBonus}` : `${ctx.hitBonus}`;
+				this.executeRoll(`1d20${sign}`, `Colpire: ${ctx.name}`);
+			},
+
+			rollAttackDamage: (evt, el, ctx) => {
+				if (!ctx?.damageFormula) return;
+				this.executeRoll(ctx.damageFormula, `Danni: ${ctx.name}`);
+			},
+
+			rollSpellEffect: (evt, el, ctx) => {
+				if (!ctx?.rollFormula) return;
+				this.executeRoll(ctx.rollFormula, `${ctx.name}`);
+			},
+
+			updateTrackerValue: async (evt, el, ctx) => {
+				if (!ctx || !this.activeCharacter.trackers?.[ctx.index]) return;
+				this.activeCharacter.trackers[ctx.index].current = Number(el.value) || 0;
+				await this.markModifiedAndSyncLocal('tracker_edit');
+			},
+
+			updateSpellSlotCurrent: async (evt, el, ctx) => {
+				if (!ctx || !this.activeCharacter.spellSlots?.[ctx.index]) return;
+				this.activeCharacter.spellSlots[ctx.index].current = Number(el.value) || 0;
+				await this.markModifiedAndSyncLocal('slot_edit');
+			},
+
+			updateCompanionHp: async (evt, el, ctx) => {
+				if (!ctx || !this.activeCharacter.companions?.[ctx.index]) return;
+				this.activeCharacter.companions[ctx.index].hp.current = Number(el.value) || 0;
+				await this.markModifiedAndSyncLocal('companion_hp');
 			},
 
 			toggleSpellPrepared: async (evt, el, ctx) => {
