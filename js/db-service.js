@@ -1,17 +1,19 @@
 // js/db-service.js
 import {APP_CONFIG} from './config.js';
 
+const SESSION_LANG_KEY = 'dnd5e_vtt_active_lang';
+
 class CompendiumDbService {
 	constructor() {
 		this.worker = null;
 		this.reqCounter = 0;
 		this.pendingRequests = new Map();
 		this.statusListeners = new Set();
-		this.activeLang = APP_CONFIG.DB.DEFAULT_LANG;
+		this.activeLang = sessionStorage.getItem(SESSION_LANG_KEY) || APP_CONFIG.DB.DEFAULT_LANG;
 		this.entityCache = new Map();
 
 		this.state = {
-			status: 'idle', // "idle" | "initializing" | "downloading" | "decompressing" | "ready" | "error"
+			status: 'idle',
 			pack: null,
 			progress: 0,
 			coreVersion: null,
@@ -23,11 +25,10 @@ class CompendiumDbService {
 		};
 	}
 
-	/**
-	 * Avvia il Web Worker in background senza bloccare l'interfaccia utente.
-	 */
 	init(lang = this.activeLang) {
 		this.activeLang = lang;
+		sessionStorage.setItem(SESSION_LANG_KEY, this.activeLang);
+
 		if (!this.worker) {
 			const workerUrl = new URL('./db-worker.js', import.meta.url);
 			this.worker = new Worker(workerUrl);
@@ -68,7 +69,7 @@ class CompendiumDbService {
 			};
 
 			this.worker.onerror = (err) => {
-				this.updateState({status: 'error', error: err.message || 'Errore nel DB Worker'});
+				this.updateState({status: 'error', error: err.message || 'DB Worker Error'});
 			};
 
 			window.addEventListener('online', () => {
@@ -90,13 +91,12 @@ class CompendiumDbService {
 		});
 	}
 
-	/**
-	 * Permette all'utente di passare in tempo reale da Italiano a Inglese (o altre lingue future).
-	 */
 	async setLanguage(newLang) {
 		if (newLang === this.activeLang && this.isReady()) return;
 		this.activeLang = newLang;
+		sessionStorage.setItem(SESSION_LANG_KEY, newLang);
 		this.entityCache.clear();
+		this.updateState({activeLang: newLang});
 		await this.syncWithRemoteManifest();
 	}
 
@@ -126,8 +126,6 @@ class CompendiumDbService {
 		});
 	}
 
-	// --- RECUPERO RECORD PER ID IMMUTABILE ---
-
 	async getById(table, id) {
 		if (id === undefined || id === null) return null;
 		const cacheKey = `${this.activeLang}:${table}:${id}`;
@@ -141,10 +139,6 @@ class CompendiumDbService {
 		return record;
 	}
 
-	/**
-	 * Risolve un'entità durante l'importazione (es. da Fight Club 5e XML)
-	 * e restituisce il record completo del DB con il suo `id` immutabile.
-	 */
 	async resolveEntity(lookup) {
 		if (!lookup || !lookup.table) return null;
 		if (lookup.id !== undefined && lookup.id !== null) {
@@ -161,11 +155,6 @@ class CompendiumDbService {
 		return this.callWorker('RESOLVE_BATCH', {items});
 	}
 
-	/**
-	 * Unisce i dati salvati nella scheda del PG (che usa `dbId` e snapshot meccanico)
-	 * con i testi localizzati (ITA/ENG) letti dal DB SQLite.
-	 * Se l'elemento è `isCustom: true`, usa direttamente i dati custom della scheda o della campagna.
-	 */
 	async hydrateEntry(table, entry, campaignCustomRegistry = null) {
 		if (!entry) return null;
 
@@ -197,8 +186,6 @@ class CompendiumDbService {
 			return entry;
 		}
 	}
-
-	// --- QUERY SPECIALIZZATE E RICERCA FTS4 ---
 
 	async search(queryText, category = null, limit = 35) {
 		return this.callWorker('SEARCH', {queryText, category, limit});
@@ -242,8 +229,16 @@ class CompendiumDbService {
 			params.push(`%${type}%`);
 		}
 		if (search) {
-			clauses.push('(c.name LIKE ? OR i.name LIKE ?)');
-			params.push(`%${search}%`, `%${search}%`);
+			clauses.push(
+				this.activeLang !== 'eng'
+				? '(c.name LIKE ? OR i.name LIKE ?)'
+				: '(c.name LIKE ?)'
+			);
+			if (this.activeLang !== 'eng') {
+				params.push(`%${search}%`, `%${search}%`);
+			} else {
+				params.push(`%${search}%`);
+			}
 		}
 		return this.callWorker('QUERY_TABLE', {
 			table: 'items',

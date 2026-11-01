@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html class="dark" lang="it">
+<html class="dark" lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
-		<title>D&amp;D 5e VTT — Hub Personaggi &amp; Campagne</title>
+		<title>D&amp;D 5e VTT — Character &amp; Campaign Hub</title>
 		<script src="https://cdn.tailwindcss.com"></script>
 	</head>
 	<body class="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-amber-500 selection:text-zinc-950">
 
+		<!-- Toast Notification Banner -->
 		<div class="hidden fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 px-4 py-3 rounded-xl border border-amber-500/40 bg-zinc-900/95 text-amber-300 shadow-2xl text-sm font-medium" data-role="notification-banner"></div>
 
+		<!-- Top Header -->
 		<header class="border-b border-zinc-800 bg-zinc-900/70 backdrop-blur sticky top-0 z-20">
 			<div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
 				<div class="flex items-center gap-3">
@@ -18,54 +20,79 @@
         </span>
 					<div>
 						<h1 class="text-lg sm:text-xl font-bold tracking-tight text-zinc-100">D&amp;D 5e Virtual Tabletop</h1>
-						<p class="text-xs text-zinc-400">Architettura Serverless Offline-First &bull; SQLite Wasm &bull; Google Drive &bull; P2P WebRTC</p>
+						<p class="text-xs text-zinc-400" data-lang="eng">Serverless Offline-First Architecture &bull; SQLite Wasm &bull; Google Drive &bull; P2P WebRTC</p>
+						<p class="hidden text-xs text-zinc-400" data-lang="ita">Architettura Serverless Offline-First &bull; SQLite Wasm &bull; Google Drive &bull; P2P WebRTC</p>
 					</div>
 				</div>
 
-				<div class="flex flex-wrap items-center gap-3">
-					<!-- Widget isolato Stato DB SQLite -->
+				<div class="flex flex-wrap items-center gap-2.5">
+					<!-- Isolated SQLite DB Status Widget -->
 					<div class="flex items-center gap-2.5 bg-zinc-950/90 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs" data-role="db-status-widget">
 						<span class="w-2 h-2 rounded-full bg-emerald-400 hidden" data-show-if="isDbReady"></span>
 						<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" data-show-if="isDownloadingDb"></span>
 						<span class="w-2 h-2 rounded-full bg-rose-500 hidden" data-show-if="isDbError"></span>
-						<span class="text-zinc-300 font-medium" data-field="dbStatusText">Verifica Compendio SQLite...</span>
+						<span class="text-zinc-300 font-medium" data-field="dbStatusText">Checking SQLite Compendium...</span>
 						<div class="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden" data-show-if="isDownloadingDb">
 							<div class="h-full bg-amber-400 transition-all duration-200" data-role="db-progress-bar" style="width: 0%"></div>
 						</div>
 					</div>
 
-					<!-- Pulsante Login visibile fin dal caricamento HTML -->
+					<!-- Language Selector with Flags -->
+					<select
+						aria-label="Language"
+						class="bg-zinc-950 border border-zinc-700 hover:border-zinc-600 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-200 cursor-pointer focus:outline-none focus:border-amber-500"
+						data-action="switchLanguage">
+						<option value="eng">🇬🇧 ENG</option>
+						<option value="ita">🇮🇹 ITA</option>
+					</select>
+
+					<!-- Google Drive Login Button (visible by default when logged out) -->
 					<button class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white shadow" data-action="loginGoogle" data-role="auth-logged-out" type="button">
 						Login Google Drive
 					</button>
 
-					<!-- Utente connesso + Esci (visibile solo dopo il login) -->
+					<!-- Logged-in User + Logout -->
 					<div class="hidden flex items-center gap-2" data-role="auth-logged-in">
 						<span class="text-xs text-emerald-400 font-medium" data-field="userEmail"></span>
 						<button class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300" data-action="logoutGoogle" type="button">
-							Esci
+							<span data-lang="eng">Logout</span>
+							<span class="hidden" data-lang="ita">Esci</span>
 						</button>
 					</div>
 				</div>
 			</div>
 		</header>
 
+		<!-- Main Content -->
 		<main class="max-w-6xl w-full mx-auto px-4 py-8 sm:py-12 flex-1 flex flex-col justify-center">
+			<!-- Hero Title -->
 			<div class="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
-				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
+				<h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3" data-lang="eng">
+					Choose your gaming station
+				</h2>
+				<h2 class="hidden text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3" data-lang="ita">
 					Scegli la tua postazione di gioco
 				</h2>
-				<p class="text-sm sm:text-base text-zinc-400">
+
+				<p class="text-sm sm:text-base text-zinc-400" data-lang="eng">
+					Sign in with Google Drive to load and save your characters and campaigns in the cloud, or work locally offline.
+				</p>
+				<p class="hidden text-sm sm:text-base text-zinc-400" data-lang="ita">
 					Effettua il login con Google Drive per caricare e salvare i tuoi personaggi e le campagne nel cloud, oppure lavora in locale.
 				</p>
 			</div>
 
-			<!-- Box Centrale Login / Stato Connessione -->
+			<!-- Central Cloud Connection Status Box -->
 			<div class="max-w-2xl w-full mx-auto mb-8">
 				<div class="rounded-2xl border border-sky-500/30 bg-sky-950/20 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4" data-role="auth-logged-out">
 					<div class="text-center sm:text-left">
-						<h3 class="text-sm font-bold text-sky-300">Accedi al tuo Cloud Personale</h3>
-						<p class="text-xs text-zinc-400 mt-0.5">
+						<h3 class="text-sm font-bold text-sky-300" data-lang="eng">Connect your Personal Cloud</h3>
+						<h3 class="hidden text-sm font-bold text-sky-300" data-lang="ita">Accedi al tuo Cloud Personale</h3>
+
+						<p class="text-xs text-zinc-400 mt-0.5" data-lang="eng">
+							Connecting Google Drive here keeps you authenticated in both the Player Sheet and the Master Screen.
+						</p>
+						<p class="hidden text-xs text-zinc-400 mt-0.5" data-lang="ita">
 							Collegando Google Drive qui sarai già autenticato sia nella Scheda Giocatore che nello Schermo Master.
 						</p>
 					</div>
@@ -77,47 +104,82 @@
 				<div class="hidden rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3" data-role="auth-logged-in">
 					<div class="flex items-center gap-2.5 text-xs">
 						<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-						<span class="text-zinc-300">Connesso a Google Drive come <strong class="text-emerald-300" data-field="userEmail"></strong></span>
+						<span class="text-zinc-300" data-lang="eng">Connected to Google Drive as <strong class="text-emerald-300" data-field="userEmail"></strong></span>
+						<span class="hidden text-zinc-300" data-lang="ita">Connesso a Google Drive come <strong class="text-emerald-300" data-field="userEmail"></strong></span>
 					</div>
-					<span class="text-[11px] text-zinc-400">Cartella Cloud: <code>DND5E_Vault</code></span>
+					<span class="text-[11px] text-zinc-400" data-lang="eng">Cloud Folder: <code>DND5E_Vault</code></span>
+					<span class="hidden text-[11px] text-zinc-400" data-lang="ita">Cartella Cloud: <code>DND5E_Vault</code></span>
 				</div>
 			</div>
 
+			<!-- Station Cards Grid -->
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+				<!-- Player Card -->
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-amber-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./pc.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" data-lang="eng">
+              GARAGE &amp; LIVE SESSION
+            </span>
+							<span class="hidden px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" data-lang="ita">
               GARAGE &amp; SESSIONE LIVE
             </span>
 							<span class="text-2xl text-zinc-500 group-hover:text-amber-400 transition-transform group-hover:translate-x-1">&rarr;</span>
 						</div>
-						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2">Area Giocatore (PC Screen)</h3>
-						<p class="text-sm text-zinc-400 leading-relaxed mb-6">
+
+						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-lang="eng">Player Area (PC Screen)</h3>
+						<h3 class="hidden text-xl sm:text-2xl font-bold text-white mb-2" data-lang="ita">Area Giocatore (PC Screen)</h3>
+
+						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-lang="eng">
+							Create or import your characters from Fight Club 5e XML, browse the offline bilingual compendium, shop during Downtime, and roll dice in real time with your party.
+						</p>
+						<p class="hidden text-sm text-zinc-400 leading-relaxed mb-6" data-lang="ita">
 							Crea o importa i tuoi personaggi da Fight Club 5e XML, consulta il compendio bilingue offline, fai acquisti nel Negozio di Downtime e lancia i dadi in tempo reale con il party.
 						</p>
 					</div>
-					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4">
+
+					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4" data-lang="eng">
+						<li>&bull; Saved in your personal Google Drive (only the active PC stays in local cache)</li>
+						<li>&bull; Free Garage Mode or bound to Campaign rules</li>
+						<li>&bull; Responsive layout for smartphones, tablets, and desktops</li>
+					</ul>
+					<ul class="hidden text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4" data-lang="ita">
 						<li>&bull; Salvataggio nel tuo Google Drive personale (solo il PG attivo resta in cache locale)</li>
 						<li>&bull; Modalità Garage libera o vincolata alle regole della Campagna</li>
 						<li>&bull; Funzionamento garantito su smartphone, tablet e desktop</li>
 					</ul>
 				</a>
 
+				<!-- Dungeon Master Card -->
 				<a class="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-indigo-500/60 p-6 sm:p-8 transition-all flex flex-col justify-between shadow-lg" href="./gm.html">
 					<div>
 						<div class="flex items-center justify-between mb-4">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" data-lang="eng">
+              CAMPAIGN CONTROL &amp; RULES
+            </span>
+							<span class="hidden px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" data-lang="ita">
               REGIA &amp; REGOLE CAMPAGNA
             </span>
 							<span class="text-2xl text-zinc-500 group-hover:text-indigo-400 transition-transform group-hover:translate-x-1">&rarr;</span>
 						</div>
-						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2">Area Dungeon Master (GM Screen)</h3>
-						<p class="text-sm text-zinc-400 leading-relaxed mb-6">
+
+						<h3 class="text-xl sm:text-2xl font-bold text-white mb-2" data-lang="eng">Dungeon Master Area (GM Screen)</h3>
+						<h3 class="hidden text-xl sm:text-2xl font-bold text-white mb-2" data-lang="ita">Area Dungeon Master (GM Screen)</h3>
+
+						<p class="text-sm text-zinc-400 leading-relaxed mb-6" data-lang="eng">
+							Create the campaign manifest, set max level and permissions, build the Downtime Shop from the SQLite database, and monitor party character sheets in real time.
+						</p>
+						<p class="hidden text-sm text-zinc-400 leading-relaxed mb-6" data-lang="ita">
 							Crea il manifesto della campagna, imposta il livello massimo e i permessi, allestisci il Negozio di Downtime pescando dal database SQLite e monitora le schede del party in tempo reale.
 						</p>
 					</div>
-					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4">
+
+					<ul class="text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4" data-lang="eng">
+						<li>&bull; Automatic read-only sharing with players' Google emails</li>
+						<li>&bull; Automatic audit of gold, level, and downtime purchases</li>
+						<li>&bull; WebRTC P2P Host to receive dice rolls and push live updates</li>
+					</ul>
+					<ul class="hidden text-xs text-zinc-400 space-y-2 border-t border-zinc-800/80 pt-4" data-lang="ita">
 						<li>&bull; Condivisione automatica in sola lettura con le email dei giocatori</li>
 						<li>&bull; Audit automatico di oro, livello e acquisti di downtime dei PG</li>
 						<li>&bull; Host WebRTC P2P per ricevere tiri e inviare aggiornamenti live</li>
@@ -127,7 +189,8 @@
 		</main>
 
 		<footer class="border-t border-zinc-900 py-4 text-center text-xs text-zinc-500 px-4">
-			D&amp;D 5e VTT &mdash; I database SQLite vengono memorizzati nella cache locale del tuo browser per l'utilizzo offline.
+			<span data-lang="eng">D&amp;D 5e VTT &mdash; SQLite databases are cached locally in your browser for offline use.</span>
+			<span class="hidden" data-lang="ita">D&amp;D 5e VTT &mdash; I database SQLite vengono memorizzati nella cache locale del tuo browser per l'utilizzo offline.</span>
 		</footer>
 
 		<script type="module">
@@ -143,18 +206,32 @@
 				setTimeout(() => el.classList.add('hidden'), 4500);
 			};
 
-			dbService.onStatusChange((st) => uiBinder.updateDbStatusWidget(document.body, st));
-			dbService.init();
+			// Applica la lingua iniziale ("eng" di default) e avvia solo il DB corrispondente
+			uiBinder.applyLanguage(document.body, dbService.activeLang);
+
+			dbService.onStatusChange((st) => {
+				uiBinder.updateDbStatusWidget(document.body, st);
+			});
+			dbService.init(dbService.activeLang);
 
 			driveService.onAuthChange((authState) => {
 				uiBinder.updateAuthWidget(document.body, authState);
 			});
 
 			uiBinder.bindActions(document.body, {
+				switchLanguage: async (evt, el) => {
+					const newLang = el.value;
+					uiBinder.applyLanguage(document.body, newLang);
+					await dbService.setLanguage(newLang);
+				},
 				loginGoogle: async () => {
 					try {
 						const profile = await driveService.signIn();
-						showBanner(`Connesso a Google Drive come ${profile.email}!`);
+						const msg =
+							dbService.activeLang === 'ita'
+							? `Connesso a Google Drive come ${profile.email}!`
+							: `Connected to Google Drive as ${profile.email}!`;
+						showBanner(msg);
 					} catch (err) {
 						showBanner(err.message);
 					}

@@ -4,7 +4,7 @@ let SQL = null;
 let coreDb = null;
 let langDb = null;
 let i18nAttached = false;
-let activeLang = 'ita';
+let activeLang = 'eng';
 let coreVersion = null;
 let langVersion = null;
 const selectQueryCache = new Map();
@@ -14,8 +14,6 @@ const ALLOWED_TABLES = new Set([
 	                               'class_features', 'backgrounds', 'items', 'monsters', 'languages',
 	                               'deities', 'rules', 'conditions', 'actions', 'variants', 'hazards'
                                ]);
-
-// --- GESTIONE CACHE INDEXEDDB ---
 
 function openCacheDB(idbName, storeName) {
 	return new Promise((resolve, reject) => {
@@ -51,8 +49,6 @@ async function writePackToCache(idbName, storeName, key, value) {
 	});
 }
 
-// --- CARICAMENTO SQL.JS E DECOMPRESSIONE GZIP ---
-
 async function ensureSqlJsLoaded(wasmCdnUrl) {
 	if (SQL) return SQL;
 	importScripts(`${wasmCdnUrl}sql-wasm.js`);
@@ -63,10 +59,9 @@ async function ensureSqlJsLoaded(wasmCdnUrl) {
 }
 
 async function decompressGzipIfNeeded(uint8Array) {
-	// Verifica magic bytes Gzip (0x1f, 0x8b)
 	if (uint8Array.length >= 2 && uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
 		if (typeof DecompressionStream === 'undefined') {
-			throw new Error('Il browser non supporta DecompressionStream per file .gz');
+			throw new Error('DecompressionStream non supportato dal browser.');
 		}
 		const stream = new Blob([uint8Array]).stream().pipeThrough(new DecompressionStream('gzip'));
 		const buffer = await new Response(stream).arrayBuffer();
@@ -129,8 +124,6 @@ async function downloadPackWithProgress(url, packLabel) {
 	return await decompressGzipIfNeeded(rawBuffer);
 }
 
-// --- MONTAGGIO DATABASE CORE + ATTACH LANGUAGE PACK ---
-
 function closeMountedDatabases() {
 	selectQueryCache.clear();
 	if (coreDb) {
@@ -159,33 +152,43 @@ function mountDatabases(coreBuffer, langBuffer, cVer, lVer) {
 		try {
 			coreDb.run(`ATTACH DATABASE '${langDb.filename}' AS i18n;`);
 			i18nAttached = true;
-		} catch (attachErr) {
-			// Fallback con slash iniziale se richiesto dal path virtuale Emscripten
+		} catch (_) {
 			try {
 				coreDb.run(`ATTACH DATABASE '/${langDb.filename}' AS i18n;`);
 				i18nAttached = true;
 			} catch (err2) {
-				console.warn('Impossibile eseguire ATTACH DATABASE i18n:', err2);
+				console.warn('ATTACH DATABASE i18n fallito:', err2);
 				i18nAttached = false;
 			}
 		}
 	}
 }
 
-// --- INIZIALIZZAZIONE E AGGIORNAMENTO NON BLOCCANTE ---
+function resolveAssetUrl(filePath, manifestUrl) {
+	const clean = String(filePath || '').replace(/^\.\//, '');
+	// Se il path nel manifest non inizia con "data/", risolvilo rispetto alla cartella di db-manifest.json
+	if (!clean.startsWith('data/') && !clean.startsWith('http')) {
+		return new URL(clean, manifestUrl).href;
+	}
+	// Altrimenti risolvilo rispetto alla root dell'app (un livello sopra /data/)
+	const appRootUrl = new URL('../', manifestUrl).href;
+	return new URL(clean, appRootUrl).href;
+}
 
 async function initAndSyncDatabases(config) {
 	const {MANIFEST_URL, IDB_NAME, IDB_STORE, SQLJS_WASM_CDN, lang} = config;
 	if (lang) activeLang = lang;
 
-	self.postMessage({type: 'DB_STATUS', status: 'initializing'});
+	self.postMessage({type: 'DB_STATUS', status: 'initializing', activeLang});
 	await ensureSqlJsLoaded(SQLJS_WASM_CDN);
 
+	// Se activeLang === "eng", langKey è null -> il DB italiano NON viene né cercato né scaricato
 	const langKey = activeLang !== 'eng' ? `lang_${activeLang}` : null;
 
-	// 1. Montaggio istantaneo dalla cache IndexedDB (per operatività immediata anche offline)
 	let cachedCore = await readPackFromCache(IDB_NAME, IDB_STORE, 'core');
 	let cachedLang = langKey ? await readPackFromCache(IDB_NAME, IDB_STORE, langKey) : null;
+
+	const needsRemoteLangDownload = Boolean(langKey && !cachedLang && navigator.onLine);
 
 	if (cachedCore && cachedCore.buffer) {
 		mountDatabases(
@@ -194,18 +197,21 @@ async function initAndSyncDatabases(config) {
 			cachedCore.version,
 			cachedLang ? cachedLang.version : null
 		);
-		self.postMessage({
-			                 type: 'DB_STATUS',
-			                 status: 'ready',
-			                 source: 'cache',
-			                 coreVersion,
-			                 langVersion,
-			                 activeLang,
-			                 i18nAttached
-		                 });
+
+		// Emette subito "ready" dalla cache solo se non dobbiamo scaricare per la prima volta il Language Pack
+		if (!needsRemoteLangDownload) {
+			self.postMessage({
+				                 type: 'DB_STATUS',
+				                 status: 'ready',
+				                 source: 'cache',
+				                 coreVersion,
+				                 langVersion,
+				                 activeLang,
+				                 i18nAttached
+			                 });
+		}
 	}
 
-	// 2. Controllo aggiornamenti in background se online
 	if (navigator.onLine) {
 		try {
 			const manifestRes = await fetch(MANIFEST_URL, {cache: 'no-store'});
@@ -213,21 +219,25 @@ async function initAndSyncDatabases(config) {
 				const manifest = await manifestRes.json();
 				let updated = false;
 
-				// Verifica aggiornamento DB Core
+				// 1. Scarica o aggiorna sempre il DB Core (ENG)
 				const remoteCore = manifest.core;
 				if (remoteCore && (!cachedCore || cachedCore.version !== remoteCore.version)) {
-					const coreUrl = new URL(remoteCore.file, MANIFEST_URL).href;
-					const freshCoreBuf = await downloadPackWithProgress(coreUrl, 'Compendio Core (ENG)');
+					const coreUrl = resolveAssetUrl(remoteCore.file, MANIFEST_URL);
+					const coreLabel = activeLang === 'eng' ? 'Core DB (ENG)' : 'Compendio Core (ENG)';
+					const freshCoreBuf = await downloadPackWithProgress(coreUrl, coreLabel);
 					cachedCore = {version: remoteCore.version, buffer: freshCoreBuf, updatedAt: Date.now()};
 					await writePackToCache(IDB_NAME, IDB_STORE, 'core', cachedCore);
 					updated = true;
 				}
 
-				// Verifica aggiornamento DB Lingua (es. ita)
+				// 2. Scarica il DB di traduzione SOLO se activeLang !== "eng"
 				const remoteLang = langKey && manifest.languages ? manifest.languages[activeLang] : null;
 				if (remoteLang && (!cachedLang || cachedLang.version !== remoteLang.version)) {
-					const langUrl = new URL(remoteLang.file, MANIFEST_URL).href;
-					const freshLangBuf = await downloadPackWithProgress(langUrl, `Traduzione (${remoteLang.label || activeLang.toUpperCase()})`);
+					const langUrl = resolveAssetUrl(remoteLang.file, MANIFEST_URL);
+					const freshLangBuf = await downloadPackWithProgress(
+						langUrl,
+						`DB ${remoteLang.label || activeLang.toUpperCase()}`
+					);
 					cachedLang = {version: remoteLang.version, buffer: freshLangBuf, updatedAt: Date.now()};
 					await writePackToCache(IDB_NAME, IDB_STORE, langKey, cachedLang);
 					updated = true;
@@ -253,20 +263,18 @@ async function initAndSyncDatabases(config) {
 			}
 		} catch (netErr) {
 			if (!coreDb) {
-				throw new Error('Download database fallito e nessuna copia locale presente: ' + netErr.message);
+				throw new Error('Failed to download DB and no offline cache found: ' + netErr.message);
 			}
 		}
 	} else if (!coreDb) {
-		throw new Error('Dispositivo offline e database non ancora presente nella cache del browser.');
+		throw new Error('Device is offline and database is not cached yet.');
 	}
 
 	return {coreVersion, langVersion, activeLang, i18nAttached};
 }
 
-// --- GENERATORE AUTOMATICO DI QUERY BILINGUI CON COALESCE ---
-
 function execStmtOn(db, sql, params = []) {
-	if (!db) throw new Error('Database SQLite non inizializzato.');
+	if (!db) throw new Error('SQLite Database not initialized.');
 	const stmt = db.prepare(sql);
 	stmt.bind(params);
 	const rows = [];
@@ -279,14 +287,14 @@ function execStmtOn(db, sql, params = []) {
 
 function getLocalizedTableSelectSql(table) {
 	if (!ALLOWED_TABLES.has(table)) {
-		throw new Error(`Tabella non consentita: ${table}`);
+		throw new Error(`Invalid table: ${table}`);
 	}
 	const cacheKey = `${table}:${activeLang}:${i18nAttached}`;
 	if (selectQueryCache.has(cacheKey)) {
 		return selectQueryCache.get(cacheKey);
 	}
 
-	const coreCols = execStmtOn(coreDb, `PRAGMA main.table_info("${table}")`).map(r => r.name);
+	const coreCols = execStmtOn(coreDb, `PRAGMA main.table_info("${table}")`).map((r) => r.name);
 
 	if (!i18nAttached || activeLang === 'eng') {
 		const sql = `SELECT c.*, c.name AS name_eng, NULL AS name_ita FROM main."${table}" c`;
@@ -295,7 +303,7 @@ function getLocalizedTableSelectSql(table) {
 	}
 
 	const i18nCols = new Set(
-		execStmtOn(coreDb, `PRAGMA i18n.table_info("${table}")`).map(r => r.name)
+		execStmtOn(coreDb, `PRAGMA i18n.table_info("${table}")`).map((r) => r.name)
 	);
 
 	if (i18nCols.size === 0) {
@@ -322,8 +330,6 @@ function getLocalizedTableSelectSql(table) {
 	return sql;
 }
 
-// --- RISOLUZIONE ENTITÀ PER ID O PER CHIAVE NATURALE (IMPORTER) ---
-
 function getById({table, id}) {
 	if (id === undefined || id === null) return null;
 	const baseSql = getLocalizedTableSelectSql(table);
@@ -331,23 +337,20 @@ function getById({table, id}) {
 	return rows[0] || null;
 }
 
-function resolveEntity({table, id, name, source, class_name, subclass_name, level}) {
+function resolveEntity({table, id, name, source, class_name, level}) {
 	if (!ALLOWED_TABLES.has(table)) {
-		throw new Error(`Tabella non valida: ${table}`);
+		throw new Error(`Invalid table: ${table}`);
 	}
 
-	// 1. Ricerca diretta per ID immutabile (usata dalle schede salvate)
 	if (id !== undefined && id !== null) {
 		const foundById = getById({table, id});
 		if (foundById) return foundById;
 	}
 
-	// 2. Ricerca per nome (inglese o tradotto) usata dagli importer (es. Fight Club 5e XML)
 	if (!name) return null;
 	const cleanName = name.trim();
 	const baseSql = getLocalizedTableSelectSql(table);
 
-	// Costruisce filtri opzionali specifici per class_features o subclasses
 	const extraClauses = [];
 	const extraParams = [];
 
@@ -366,7 +369,6 @@ function resolveEntity({table, id, name, source, class_name, subclass_name, leve
 
 	const extraWhere = extraClauses.length > 0 ? ` AND ${extraClauses.join(' AND ')}` : '';
 
-	// Cerca prima nel nome inglese del DB Core
 	const byEng = execStmtOn(
 		coreDb,
 		`${baseSql} WHERE LOWER(c.name) = LOWER(?)${extraWhere} ORDER BY c.id ASC LIMIT 1`,
@@ -374,7 +376,6 @@ function resolveEntity({table, id, name, source, class_name, subclass_name, leve
 	);
 	if (byEng.length > 0) return byEng[0];
 
-	// Se non trovato con source restrittivo, riprova senza filtro source (Fight Club spesso non specifica il manuale)
 	if (source) {
 		const byEngNoSource = execStmtOn(
 			coreDb,
@@ -384,7 +385,6 @@ function resolveEntity({table, id, name, source, class_name, subclass_name, leve
 		if (byEngNoSource.length > 0) return byEngNoSource[0];
 	}
 
-	// Se è montato il DB di traduzione, cerca anche nel nome tradotto (es. XML in italiano)
 	if (i18nAttached) {
 		const byTranslated = execStmtOn(
 			coreDb,
@@ -397,8 +397,6 @@ function resolveEntity({table, id, name, source, class_name, subclass_name, leve
 	return null;
 }
 
-// --- RICERCA FULL-TEXT FTS4 BILINGUE ---
-
 function searchCompendium({queryText, category = null, limit = 35}) {
 	const clean = (queryText || '').trim();
 	if (!clean) return [];
@@ -407,7 +405,7 @@ function searchCompendium({queryText, category = null, limit = 35}) {
 		.replace(/['"*()-]/g, ' ')
 		.split(/\s+/)
 		.filter(Boolean)
-		.map(term => `${term}*`)
+		.map((term) => `${term}*`)
 		.join(' ');
 
 	if (!ftsQuery) return [];
@@ -445,17 +443,13 @@ function searchCompendium({queryText, category = null, limit = 35}) {
 		} catch (_) {}
 	};
 
-	// 1. Cerca prima nella tabella FTS4 della lingua attiva (es. Italiano)
 	if (langDb && activeLang !== 'eng') {
 		runFtsOn(langDb, true);
 	}
-	// 2. Cerca anche nella tabella FTS4 Inglese (Core) per coprire termini non ancora tradotti
 	runFtsOn(coreDb, false);
 
 	return Array.from(mergedMap.values()).slice(0, limit);
 }
-
-// --- QUERY FILTRATE PER TABELLA (USANDO LE VISTE COALESCE) ---
 
 function queryTable({table, whereClause = '', params = [], orderBy = 'name ASC', limit = 200}) {
 	const baseSql = getLocalizedTableSelectSql(table);
@@ -464,8 +458,6 @@ function queryTable({table, whereClause = '', params = [], orderBy = 'name ASC',
 	const limitSql = limit ? ` LIMIT ${Number(limit)}` : '';
 	return execStmtOn(coreDb, `${baseSql}${whereSql}${orderSql}${limitSql}`, params);
 }
-
-// --- DISPATCHER RPC ---
 
 self.onmessage = async (event) => {
 	const {reqId, action, payload} = event.data || {};
@@ -483,7 +475,7 @@ self.onmessage = async (event) => {
 				result = resolveEntity(payload);
 				break;
 			case 'RESOLVE_BATCH':
-				result = (payload.items || []).map(item => resolveEntity(item));
+				result = (payload.items || []).map((item) => resolveEntity(item));
 				break;
 			case 'QUERY_TABLE':
 				result = queryTable(payload);
@@ -495,7 +487,7 @@ self.onmessage = async (event) => {
 				result = searchCompendium(payload);
 				break;
 			default:
-				throw new Error(`Azione worker sconosciuta: ${action}`);
+				throw new Error(`Unknown worker action: ${action}`);
 		}
 
 		self.postMessage({type: 'RPC_RESPONSE', reqId, ok: true, result});

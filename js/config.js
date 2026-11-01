@@ -1,11 +1,9 @@
 // js/config.js
 
 export const APP_CONFIG = {
-	// Credenziali pubbliche generate nella Google Cloud Console
-	GOOGLE_CLIENT_ID: '877024851125-nekkss6jois626hq4v4a529nb3jdtclr.apps.googleusercontent.com',
-	GOOGLE_API_KEY: 'AIzaSyDsoUVsMU6RrylDdQnFohJcJ_W61fba1Gg',
+	GOOGLE_CLIENT_ID: 'IL_TUO_CLIENT_ID.apps.googleusercontent.com',
+	GOOGLE_API_KEY: 'LA_TUA_API_KEY_PUBBLICA',
 
-	// Nome della cartella creata automaticamente nel Google Drive del giocatore/master
 	DRIVE_VAULT_FOLDER: 'DND5E_Vault',
 
 	DB: {
@@ -13,7 +11,7 @@ export const APP_CONFIG = {
 		IDB_NAME: 'DND5E_Compendium_Cache_v2',
 		IDB_STORE: 'sqlite_packs',
 		SQLJS_WASM_CDN: 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/',
-		DEFAULT_LANG: 'ita' // "ita" | "eng"
+		DEFAULT_LANG: 'eng' // Parte in inglese scaricando solo il DB Core
 	},
 
 	WEBRTC: {

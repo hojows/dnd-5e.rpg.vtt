@@ -158,18 +158,53 @@ class DomUiBinder {
 		});
 	}
 
+	/**
+	 * Commuta la lingua dell'interfaccia mostrando gli elementi [data-lang="<lang>"]
+	 * presenti nel file HTML e allineando i menu <select data-action="switchLanguage">.
+	 */
+	applyLanguage(rootEl, lang = 'eng') {
+		if (!rootEl) return;
+		document.documentElement.lang = lang === 'ita' ? 'it' : 'en';
+
+		rootEl.querySelectorAll('[data-lang]').forEach((el) => {
+			const elLang = el.getAttribute('data-lang');
+			el.classList.toggle('hidden', elLang !== lang);
+		});
+
+		rootEl.querySelectorAll('select[data-action="switchLanguage"]').forEach((sel) => {
+			if (sel.value !== lang) {
+				sel.value = lang;
+			}
+		});
+	}
+
+	/**
+	 * Aggiorna il widget [data-role="db-status-widget"] nella lingua corrente (ENG o ITA).
+	 */
 	updateDbStatusWidget(rootEl, dbState) {
 		if (!rootEl || !dbState) return;
 		const widgetEl = rootEl.querySelector('[data-role="db-status-widget"]') || rootEl;
+		const lang = dbState.activeLang || dbService.activeLang || 'eng';
+		const isIta = lang === 'ita';
+		const ver = (isIta ? dbState.langVersion : dbState.coreVersion) || dbState.coreVersion || '1.0';
 
-		const labelMap = {
-			idle: 'DB in attesa',
-			initializing: 'Inizializzazione SQLite...',
-			downloading: `Download ${dbState.pack || 'DB'} (${dbState.progress ?? 0}%)`,
-			decompressing: `Decompressione ${dbState.pack || 'DB'}...`,
-			ready: `DB Pronto (${dbState.activeLang?.toUpperCase() || 'ITA'} v${dbState.coreVersion || '1.0'})`,
-			error: `Errore DB: ${dbState.error || 'Sconosciuto'}`
-		};
+		const labelMap = isIta
+		                 ? {
+				idle: 'DB in attesa',
+				initializing: 'Inizializzazione SQLite...',
+				downloading: `Download ${dbState.pack || 'DB'} (${dbState.progress ?? 0}%)`,
+				decompressing: `Decompressione ${dbState.pack || 'DB'}...`,
+				ready: `DB Pronto (ITA v${ver})`,
+				error: `Errore DB: ${dbState.error || 'Sconosciuto'}`
+			}
+		                 : {
+				idle: 'DB idle',
+				initializing: 'Initializing SQLite...',
+				downloading: `Downloading ${dbState.pack || 'DB'} (${dbState.progress ?? 0}%)`,
+				decompressing: `Decompressing ${dbState.pack || 'DB'}...`,
+				ready: `DB Ready (ENG v${ver})`,
+				error: `DB Error: ${dbState.error || 'Unknown'}`
+			};
 
 		this.bindFields(widgetEl, {
 			dbStatusText: labelMap[dbState.status] || dbState.status,
